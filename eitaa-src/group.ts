@@ -9,11 +9,11 @@ import { esc } from "./util";
 export interface GroupCfg {
   chat: string;
   forum: boolean;
-  topics: { posts?: number; reports?: number; chat?: number; lessons?: number };
+  topics: { posts?: number; reports?: number; chat?: number; lessons?: number; council?: number };
   review: boolean;          // supervisor on/off
   title?: string;
 }
-export const TOPIC_NAMES: Record<keyof GroupCfg["topics"], string> = { posts: "📝 مطالب", reports: "🚨 گزارشات", chat: "💬 چت با ایجنت", lessons: "🧠 آموخته‌ها" };
+export const TOPIC_NAMES: Record<keyof GroupCfg["topics"], string> = { posts: "📝 مطالب", reports: "🚨 گزارشات", chat: "💬 چت با ایجنت", lessons: "🧠 آموخته‌ها", council: "🤝 شورا (ناظر و دستیار)" };
 
 // ------------------------------------------------------------------ small key/value store (table ea_kv)
 export async function kvGet(env: Env, k: string): Promise<string | null> {
@@ -60,22 +60,28 @@ const manageKb = async (env: Env, postId: number, label = "⚙️ مدیریت �
   return u ? { inline_keyboard: [[{ text: label, url: `https://t.me/${u}?start=ea_p${postId}` }]] } : undefined;
 };
 
-export async function supToken(env: Env, uid: number): Promise<string> {
-  const v = await kvGet(env, `sup:${uid}`);
+export type Role = "sup" | "asst";
+const ROLE_FA: Record<Role, string> = { sup: "🛡 ناظر", asst: "🧭 دستیار" };
+export const roleName = (r: Role | "owner" | "main") => (r === "sup" || r === "asst" ? ROLE_FA[r] : r === "owner" ? "👤 شما" : "🤖 ربات");
+export async function roleToken(env: Env, uid: number, role: Role): Promise<string> {
+  const v = await kvGet(env, `${role}:${uid}`);
   if (v) { const t = await dec(env.SECRET_KEY, v); if (t) return t; }
-  return env.SUPERVISOR_TOKEN || "";
+  return (role === "sup" ? env.SUPERVISOR_TOKEN : env.ASSISTANT_TOKEN) || "";
 }
-export async function setSupervisor(env: Env, uid: number, token: string): Promise<{ ok: boolean; name: string; error: string; inGroup: boolean | null }> {
+export const supToken = (env: Env, uid: number) => roleToken(env, uid, "sup");
+export async function setRoleBot(env: Env, uid: number, role: Role, token: string): Promise<{ ok: boolean; name: string; error: string; inGroup: boolean | null }> {
   let me: { username?: string; id: number };
   try { me = await tg.tgWith(env, token, "getMe"); } catch (e) { return { ok: false, name: "", error: (e as Error).message, inGroup: null }; }
-  await kvSet(env, `sup:${uid}`, await enc(env.SECRET_KEY, token));
-  await kvSet(env, `supname:${uid}`, me.username || "");
+  await kvSet(env, `${role}:${uid}`, await enc(env.SECRET_KEY, token));
+  await kvSet(env, `${role}name:${uid}`, me.username || "");
   const g = await getGroup(env, uid);
   let inGroup: boolean | null = null;
   if (g) { try { const m = await tg.tgWith<{ status: string }>(env, token, "getChatMember", { chat_id: g.chat, user_id: me.id }); inGroup = !["left", "kicked"].includes(m.status); } catch { inGroup = false; } }
   return { ok: true, name: me.username || "", error: "", inGroup };
 }
-export async function clearSupervisor(env: Env, uid: number): Promise<void> { await kvDel(env, `sup:${uid}`); await kvDel(env, `supname:${uid}`); }
+export const setSupervisor = (env: Env, uid: number, token: string) => setRoleBot(env, uid, "sup", token);
+export async function clearRoleBot(env: Env, uid: number, role: Role): Promise<void> { await kvDel(env, `${role}:${uid}`); await kvDel(env, `${role}name:${uid}`); }
+export const clearSupervisor = (env: Env, uid: number) => clearRoleBot(env, uid, "sup");
 
 // ------------------------------------------------------------------ group setup
 export async function setupGroup(env: Env, uid: number, chatId: number, title: string): Promise<string> {
@@ -104,6 +110,7 @@ export async function setupGroup(env: Env, uid: number, chatId: number, title: s
   await say("posts", "📝 <b>مطالب</b>\nهر پستی که قرار است در ایتا منتشر شود، اول این‌جا می‌آید؛ زیر هر پست یک دکمه‌ی «⚙️ مدیریت پست» است که شما را به ربات می‌برد (گزارش خطا، تصحیح، حذف، افزودن عکس/ویدیو).");
   await say("reports", "🚨 <b>گزارشات</b>\nگزارش ناظر درباره‌ی ایرادهای پست‌ها، اصلاح‌های خودکار و پست‌هایی که ارسال نشدند اینجا می‌آید.");
   await say("chat", "💬 <b>چت با ایجنت</b>\nاینجا مثل «گفتگو با ایجنت» در ربات می‌توانید دستور بدهید (فقط پیام شما پاسخ داده می‌شود).");
+  await say("council", "🤝 <b>شورا</b>\nاینجا «ناظر» و «دستیار» درباره‌ی ایرادها و آموخته‌ها با هم گفتگو می‌کنند، به هم دستور می‌دهند و هر وقت کمک یا نظر شما را بخواهند اینجا (و در ربات) می‌پرسند. هر پیامی که شما اینجا بنویسید به آن‌ها می‌رسد.");
   await say("lessons", "🧠 <b>آموخته‌ها</b>\nهر خطایی که گزارش کنید به یک قانون تبدیل می‌شود و اینجا ثبت می‌شود تا تکرار نشود.");
   return `✅ این گروه به‌عنوان گروه پست‌ها ثبت شد.\n${forum ? "تاپیک‌ها: " + (Object.keys(cfg.topics).length ? "ساخته شد" : "ساخته نشد") : "بدون تاپیک"}${note}`;
 }
@@ -190,3 +197,12 @@ export async function setVerdict(env: Env, postId: number, uid: number, verdict:
     .bind(postId, uid, verdict, note.slice(0, 400), now()).run();
 }
 export const getPub = (env: Env, postId: number) => env.DB.prepare("SELECT * FROM ea_pubs WHERE post_id=?").bind(postId).first<{ post_id: number; user_id: number; grp_chat: string; grp_msg: number; verdict: string; note: string }>();
+
+/** A message from one of the two agents into a topic: through its own bot when it is configured and in the group, otherwise through the main bot with its name in front. */
+export async function sayAs(env: Env, uid: number, role: Role | "main", key: keyof GroupCfg["topics"], text: string, kb?: unknown): Promise<boolean> {
+  const cfg = await getGroup(env, uid);
+  if (!cfg) return false;
+  const own = role === "main" ? "" : await roleToken(env, uid, role);
+  if (own) { try { await sendTo(env, own, cfg, key, text, kb); return true; } catch { /* not in the group yet: fall back */ } }
+  try { await sendTo(env, env.BOT_TOKEN, cfg, key, role === "main" ? text : `<b>${roleName(role)}</b>\n${text}`, kb); return true; } catch { return false; }
+}

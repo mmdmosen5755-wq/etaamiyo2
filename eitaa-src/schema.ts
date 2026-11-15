@@ -13,5 +13,9 @@ export const SCHEMA: string[] = [
  "CREATE TABLE IF NOT EXISTS ea_kv (\n  k TEXT PRIMARY KEY,\n  v TEXT NOT NULL DEFAULT ''\n)",
  "CREATE TABLE IF NOT EXISTS ea_pubs (\n  post_id INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  grp_chat TEXT NOT NULL DEFAULT '',\n  grp_msg INTEGER NOT NULL DEFAULT 0,\n  verdict TEXT NOT NULL DEFAULT '',\n  note TEXT NOT NULL DEFAULT '',\n  updated_at INTEGER NOT NULL DEFAULT 0\n)",
  "CREATE TABLE IF NOT EXISTS ea_lessons (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  user_id INTEGER NOT NULL,\n  rule TEXT NOT NULL,\n  source TEXT NOT NULL DEFAULT '',\n  created_at INTEGER NOT NULL\n)",
- "CREATE INDEX IF NOT EXISTS idx_lessons_user ON ea_lessons(user_id)"
+ "CREATE INDEX IF NOT EXISTS idx_lessons_user ON ea_lessons(user_id)",
+ "CREATE TABLE IF NOT EXISTS ea_events (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  user_id INTEGER NOT NULL,\n  kind TEXT NOT NULL,\n  payload TEXT NOT NULL DEFAULT '',\n  status TEXT NOT NULL DEFAULT 'new',\n  created_at INTEGER NOT NULL\n)",
+ "CREATE TABLE IF NOT EXISTS ea_council (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  user_id INTEGER NOT NULL,\n  role TEXT NOT NULL,\n  text TEXT NOT NULL,\n  created_at INTEGER NOT NULL\n)",
+ "CREATE TABLE IF NOT EXISTS ea_asks (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  user_id INTEGER NOT NULL,\n  role TEXT NOT NULL DEFAULT 'sup',\n  question TEXT NOT NULL,\n  answer TEXT NOT NULL DEFAULT '',\n  status TEXT NOT NULL DEFAULT 'open',\n  created_at INTEGER NOT NULL\n)",
+ "CREATE INDEX IF NOT EXISTS idx_council_user ON ea_council(user_id)"
 ];

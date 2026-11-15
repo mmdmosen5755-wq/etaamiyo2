@@ -13,7 +13,7 @@ function makeD1() {
     bind: (...p) => wrap(sql, p),
     run: async () => {
       const r = db.prepare(sql).run(...params);
-      return { success: true, meta: { changes: Number(r.changes) } };
+      return { success: true, meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } };
     },
     first: async () => db.prepare(sql).get(...params) ?? null,
     all: async () => ({ results: db.prepare(sql).all(...params).map((r) => ({ ...r })), success: true }),
@@ -631,9 +631,9 @@ test('ایتا: /eagroup گروه و چهار تاپیک را می‌سازد و
   await send({ text: '/eagroup' }, U(3999, 'Free', 'free'), GROUP);
   assert.equal(dbq("SELECT * FROM ea_kv WHERE k LIKE 'grp:%'").length, 0);
   await send({ text: '/eagroup' }, OWNER, GROUP);
-  assert.equal(tgOf('createForumTopic').length, 4);
+  assert.equal(tgOf('createForumTopic').length, 5);
   const cfg = JSON.parse(dbq("SELECT v FROM ea_kv WHERE k='grp:1000'")[0].v);
-  assert.equal(cfg.chat, String(GROUP.id)); assert.equal(cfg.forum, true); assert.ok(cfg.topics.posts && cfg.topics.reports && cfg.topics.chat && cfg.topics.lessons);
+  assert.equal(cfg.chat, String(GROUP.id)); assert.equal(cfg.forum, true); assert.ok(cfg.topics.posts && cfg.topics.reports && cfg.topics.chat && cfg.topics.lessons && cfg.topics.council);
   assert.ok(gsent().some((c) => c.payload.message_thread_id === cfg.topics.posts));
 });
 
@@ -793,6 +793,122 @@ test('ایتا: ویدیوی بدون لینک قابل‌دانلود با تص
   st.refs.set('c/9', { image: 'https://cdn.eitaa.test/t.jpg', text: 'فیلم', sticker: false, video: '', hasVideo: true });
   const r = resolvePost(st, { from_ref: 'c/9' }, 'امضا');
   assert.ok(r.error, JSON.stringify(r));
+});
+
+
+// ---------- شورا (ناظر + دستیار)، سایت شخصی، ویرایش آموخته‌ها ----------
+const calls = (...c) => ({ choices: [{ message: { content: '', tool_calls: c.map(([name, args], i) => ({ id: 'c' + i + Math.random().toString(36).slice(2, 6), type: 'function', function: { name, arguments: JSON.stringify(args) } })) } }] });
+const councilMsgs = () => dbq('SELECT role, text FROM ea_council ORDER BY id');
+
+test('شورا: ناظر گزارش می‌دهد، دستیار نظر می‌دهد، آموخته را اصلاح می‌کند و به ناظر دستور حذف پست می‌دهد', async () => {
+  reset(); eitaaCalls.length = 0;
+  const cfg = JSON.parse(dbq("SELECT v FROM ea_kv WHERE k='grp:1000'")[0].v);
+  env.DB.raw.prepare('DELETE FROM ea_events').run();
+  const id = insPost('پست غلط برای حذف');
+  verdict({ ok: true, major: false, problems: [], fixed_text: null });
+  await runCron();                                                         // ارسال می‌شود
+  assert.equal(dbq('SELECT status s FROM ea_posts WHERE id=?', id)[0].s, 'sent');
+  env.DB.raw.prepare('DELETE FROM ea_events').run(); env.DB.raw.prepare("DELETE FROM ea_kv WHERE k LIKE 'cc%'").run();
+  env.DB.raw.prepare("INSERT INTO ea_lessons(user_id,rule,source,created_at) VALUES(1000,'قانون مبهم قدیمی','x',1)").run();
+  const lid = dbq("SELECT id FROM ea_lessons WHERE rule='قانون مبهم قدیمی'")[0].id;
+  env.DB.raw.prepare("INSERT INTO ea_events(user_id,kind,payload,status,created_at) VALUES(1000,'reported_error',?, 'new',1)").run(JSON.stringify({ id, error: 'تاریخ اشتباه بود', lesson: 'تاریخ را با امروز تطبیق بده', fixed: false }));
+  aiQueue.push(calls(['say', { text: 'خطای پست را بررسی کردم؛ تاریخ اشتباه بود.' }], ['lesson_add', { rule: 'تاریخ هر پست باید با امروز بخواند' }]));      // ناظر
+  aiQueue.push(calls(['say', { text: 'نظرم: قانون قدیمی مبهم است؛ اصلاحش می‌کنم و پست را حذف کن.' }], ['lesson_edit', { id: lid, rule: 'هیچ پستی با تاریخ گذشته منتشر نشود' }], ['delete_post', { id, reason: 'تاریخ اشتباه' }]));   // دستیار
+  aiQueue.push(calls(['say', { text: 'انجام شد.' }], ['finish', {}]));       // ناظر
+  await runCron();
+  const roles = councilMsgs().map((m) => m.role);
+  assert.deepEqual(roles.slice(0, 3), ['sup', 'asst', 'sup'], JSON.stringify(councilMsgs()));
+  assert.equal(dbq('SELECT status s FROM ea_posts WHERE id=?', id)[0].s, 'deleted');
+  assert.ok(eitaaCalls.some((c) => c.method === 'deleteMessage'));
+  assert.equal(dbq('SELECT rule FROM ea_lessons WHERE id=?', lid)[0].rule, 'هیچ پستی با تاریخ گذشته منتشر نشود');
+  assert.ok(dbq("SELECT 1 FROM ea_lessons WHERE rule='تاریخ هر پست باید با امروز بخواند'").length === 1);
+  const inCouncil = gsent().filter((c) => c.payload.message_thread_id === cfg.topics.council).map((c) => String(c.payload.text));
+  assert.ok(inCouncil.some((t) => t.includes('ناظر')) && inCouncil.some((t) => t.includes('دستیار')), JSON.stringify(inCouncil));
+});
+
+test('شورا: دستیار از مالک سؤال می‌پرسد (گروه + ربات)، مالک جواب می‌دهد و جلسه ادامه می‌یابد؛ مالک در تاپیک شورا هم می‌تواند حرف بزند', async () => {
+  reset();
+  const cfg = JSON.parse(dbq("SELECT v FROM ea_kv WHERE k='grp:1000'")[0].v);
+  env.DB.raw.prepare('DELETE FROM ea_events').run(); env.DB.raw.prepare("DELETE FROM ea_kv WHERE k LIKE 'cc%'").run(); env.DB.raw.prepare('DELETE FROM ea_asks').run();
+  env.DB.raw.prepare("INSERT INTO ea_events(user_id,kind,payload,status,created_at) VALUES(1000,'manual','{}','new',1)").run();
+  aiQueue.push(calls(['say', { text: 'گزارش: امروز دو پست اصلاح شد.' }]));
+  aiQueue.push(calls(['say', { text: 'یک تصمیم لازم است.' }], ['ask_owner', { question: 'پست‌های دارای لینک خارجی را حذف کنیم یا فقط لینک را برداریم؟' }]));
+  await runCron();
+  const ask = dbq("SELECT * FROM ea_asks WHERE status='open'")[0];
+  assert.ok(ask && ask.role === 'asst');
+  assert.ok(sent(1000).some((c) => JSON.stringify(c.payload.reply_markup || '').includes(`as:ans:${ask.id}`)), 'پیام ربات به مالک: ' + JSON.stringify(sent(1000).map((c) => [c.payload.text, c.payload.reply_markup])));
+  assert.ok(gsent().some((c) => c.payload.message_thread_id === cfg.topics.council && String(c.payload.text).includes('از شما')), 'پیام در گروه');
+  reset();
+  await cbq(`as:ans:${ask.id}`);
+  await send({ text: 'فقط لینک را بردار' }, OWNER);
+  assert.equal(dbq('SELECT status s, answer a FROM ea_asks WHERE id=?', ask.id)[0].a, 'فقط لینک را بردار');
+  aiQueue.push(calls(['say', { text: 'ممنون؛ فقط لینک‌ها را برمی‌داریم.' }], ['lesson_add', { rule: 'لینک خارجی را بردار، پست را حذف نکن' }], ['finish', {}]));
+  await runCron();
+  assert.ok(councilMsgs().some((m) => m.role === 'owner' && m.text === 'فقط لینک را بردار'));
+  assert.ok(councilMsgs().some((m) => m.role === 'asst' && m.text.includes('ممنون')));
+  assert.equal(dbq("SELECT 1 FROM ea_lessons WHERE rule='لینک خارجی را بردار، پست را حذف نکن'").length, 1);
+  // مالک مستقیم در تاپیک شورا
+  reset();
+  await send({ text: 'امروز دقیق‌تر باشید', message_thread_id: cfg.topics.council }, OWNER, GROUP);
+  assert.ok(dbq("SELECT 1 FROM ea_events WHERE kind='owner_note' AND status='new'").length === 1);
+  assert.equal(aiCalls.length, 0, 'پیام تاپیک شورا به چت ایجنت نمی‌رود');
+});
+
+test('آموخته‌ها از داخل ربات: افزودن، ویرایش، حذف', async () => {
+  reset();
+  await send({ text: '/eitaa' }, OWNER);
+  await cbq('gp:ln');
+  await send({ text: 'هر پست باید یک تیتر داشته باشد' }, OWNER);
+  const l = dbq("SELECT id FROM ea_lessons WHERE rule='هر پست باید یک تیتر داشته باشد'")[0];
+  assert.ok(l);
+  await cbq(`gp:le:${l.id}`);
+  await send({ text: 'هر پست باید یک تیتر کوتاه داشته باشد' }, OWNER);
+  assert.equal(dbq('SELECT rule r FROM ea_lessons WHERE id=?', l.id)[0].r, 'هر پست باید یک تیتر کوتاه داشته باشد');
+  await cbq(`gp:ld:${l.id}`);
+  assert.equal(dbq('SELECT * FROM ea_lessons WHERE id=?', l.id).length, 0);
+});
+
+test('سایت شخصی: لینک از ربات، API با توکن، ویرایش پست = حذف + ارسال درست، آموخته‌ها، شورا', async () => {
+  env.WORKER_URL = 'https://w.example.workers.dev';
+  reset();
+  await send({ text: '/site' }, OWNER);
+  const link = texts(1000).join('\n').match(/https:\/\/w\.example\.workers\.dev\/app#k=([\w-]+)/);
+  assert.ok(link, texts(1000).join('|'));
+  const T = link[1];
+  const call = (path, body, token = T) => worker.fetch(new Request('https://w.example.workers.dev/app/api/' + path, { method: body ? 'POST' : 'GET', headers: { authorization: 'Bearer ' + token, 'content-type': 'application/json' }, body: body ? JSON.stringify(body) : undefined }), env).then(async (r) => ({ status: r.status, j: await r.json() }));
+  const page = await worker.fetch(new Request('https://w.example.workers.dev/app'), env);
+  assert.equal(page.status, 200); assert.ok((await page.text()).includes('پنل ایجنت ایتا'));
+  assert.equal((await call('state', null, 'x'.repeat(30))).status, 401);
+  assert.equal((await call('state')).j.group.forum, true);
+  // آموخته‌ها
+  assert.equal((await call('lesson', { op: 'add', rule: 'قانون از سایت' })).j.ok, true);
+  const lid = dbq("SELECT id FROM ea_lessons WHERE rule='قانون از سایت'")[0].id;
+  await call('lesson', { op: 'edit', id: lid, rule: 'قانون ویرایش‌شده از سایت' });
+  assert.equal((await call('lessons')).j.lessons.find((x) => x.id === lid).rule, 'قانون ویرایش‌شده از سایت');
+  await call('lesson', { op: 'delete', id: lid });
+  assert.equal(dbq('SELECT * FROM ea_lessons WHERE id=?', lid).length, 0);
+  // ویرایش پست
+  eitaaCalls.length = 0;
+  const id = insPost('متن اولیه سایت');
+  verdict({ ok: true, major: false, problems: [], fixed_text: null });
+  await runCron();
+  const list = (await call('posts?status=sent&q=' + encodeURIComponent('اولیه'))).j.posts;
+  assert.ok(list.some((p) => p.id === id));
+  const r = await call(`post/${id}/edit`, { text: 'متن درست‌شده سایت' });
+  assert.ok(r.j.ok, JSON.stringify(r));
+  assert.equal(dbq('SELECT status s FROM ea_posts WHERE id=?', id)[0].s, 'replaced');
+  assert.ok(eitaaCalls.some((c) => c.method === 'deleteMessage'));
+  verdict({ ok: true, major: false, problems: [], fixed_text: null });
+  await runCron();
+  assert.ok(eitaaCalls.some((c) => c.method === 'sendMessage' && c.form.text === 'متن درست‌شده سایت'));
+  // شورا
+  assert.equal((await call('council/say', { text: 'سلام شورا' })).j.ok, true);
+  assert.ok((await call('council')).j.messages.some((m) => m.text === 'سلام شورا'));
+  // ربات‌های ناظر/دستیار
+  assert.equal((await call('settings', { role: 'asst', token: 'bad' })).status, 400);
+  const ok = await call('settings', { role: 'asst', token: '9876543:ABCDEFGHIJKLMNOPQRSTUVWXYZ' });
+  assert.ok(ok.j.ok, JSON.stringify(ok));
+  assert.equal((await call('state')).j.asst.has, true);
 });
 
 // ---------- اجرا ----------

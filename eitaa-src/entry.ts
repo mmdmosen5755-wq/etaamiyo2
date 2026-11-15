@@ -6,6 +6,8 @@ import { dropGroup, getGroup, groupOwner, kvGet, kvSet, setupGroup } from "./gro
 import * as tg from "./tg";
 import { Env } from "./env";
 import { tick } from "./scheduler";
+import { processCouncil, ownerSpoke } from "./council";
+import * as web from "./web";
 import { TgUpdate } from "./tg";
 import { SCHEMA } from "./schema";
 
@@ -39,7 +41,11 @@ export async function handle(host: HostEnv, access: boolean, update: TgUpdate, w
 
 export async function cron(host: HostEnv): Promise<void> {
   await tick(adapt(host, true));
+  try { await processCouncil(adapt(host, true)); } catch (e) { console.error("council tick failed", (e as Error).message); }
 }
+
+export const webPage = () => web.appPage();
+export async function webApi(host: HostEnv, request: Request, path: string): Promise<Response> { return web.api(adapt(host, true), request, path); }
 
 /**
  * Messages from groups/supergroups. Returns true when the module consumed the update:
@@ -66,14 +72,15 @@ export async function handleGroup(host: HostEnv, update: TgUpdate, wait: (p: Pro
   const owner = await groupOwner(env, m.chat.id);
   if (owner === null) return false;
   const g = await getGroup(env, owner);
-  if (!g || m.from.id !== owner || !text || text.startsWith("/") || !g.topics.chat || m.message_thread_id !== g.topics.chat) return true;
+  if (!g || m.from.id !== owner || !text || text.startsWith("/") || !(g.topics.chat || g.topics.council) || ![g.topics.chat, g.topics.council].includes(m.message_thread_id)) return true;
   const last = Number((await kvGet(env, `gmlast:${m.chat.id}`)) || 0);
   if (m.message_id <= last) return true;                                       // Telegram re-delivery
   await kvSet(env, `gmlast:${m.chat.id}`, String(m.message_id));
+  if (g.topics.council && m.message_thread_id === g.topics.council) { await ownerSpoke(env, owner, text); return true; }   // the owner talks to the council
   const user = await touchUser(env, owner, m.from.first_name || "", m.from.username || "");
   if (!user.eitaa_token_enc || !(await userChannels(env, owner)).length) { await say("ابتدا در ربات توکن ایتایار را ثبت و یک کانال اضافه کنید."); return true; }
   const before = await getSession(env, owner);
-  const renv = { ...env, EA_REDIRECT: { from: owner, chat: m.chat.id, thread: g.topics.chat } };
+  const renv = { ...env, EA_REDIRECT: { from: owner, chat: m.chat.id, thread: m.message_thread_id || 0 } };
   try { await chat.turn({ env: renv, wait }, user, m, text, {}); }
   finally { await setSession(env, owner, before.state, before.data); }         // the private session is not touched by a group chat
   return true;

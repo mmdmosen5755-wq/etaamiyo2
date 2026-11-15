@@ -6,7 +6,7 @@
   "description": "Commercial AI Telegram bot on Cloudflare Workers (Workers AI + D1) with an Eitaa module",
   "scripts": {
     "setup": "node setup.mjs",
-    "build:eitaa": "esbuild eitaa-src/entry.ts --bundle --format=esm --target=es2022 --outfile=src/eitaa.js",
+    "build:eitaa": "esbuild eitaa-src/entry.ts --bundle --format=esm --target=es2022 --loader:.html=text --outfile=src/eitaa.js",
     "test": "node test/worker.test.mjs && node test/setup.test.mjs"
   },
   "engines": { "node": ">=18" }

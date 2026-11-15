@@ -152,3 +152,31 @@ CREATE TABLE IF NOT EXISTS ea_lessons (
   created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_lessons_user ON ea_lessons(user_id);
+
+-- شورای ناظر و دستیار
+CREATE TABLE IF NOT EXISTS ea_events (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  kind TEXT NOT NULL,
+  payload TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'new',
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ea_council (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  role TEXT NOT NULL,
+  text TEXT NOT NULL,
+  created_at INTEGER NOT NULL
+);
+CREATE TABLE IF NOT EXISTS ea_asks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id INTEGER NOT NULL,
+  role TEXT NOT NULL DEFAULT 'sup',
+  question TEXT NOT NULL,
+  answer TEXT NOT NULL DEFAULT '',
+  status TEXT NOT NULL DEFAULT 'open',
+  created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_council_user ON ea_council(user_id);
+

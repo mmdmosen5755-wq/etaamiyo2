@@ -62,7 +62,8 @@ const REVIEW_SYS =
   "Check: (1) leftover signature/@id/link/promotion of ANOTHER channel or site, anywhere (especially the last lines); (2) broken, cut-off or garbled sentences; (3) advertising or giveaway content; " +
   "(4) text that contradicts today's date or the stated task; (5) repeated lines, stray symbols, template placeholders; (6) anything unprofessional. " +
   "The owner's OWN signature lines (given below) are correct and must be kept exactly. Do not rewrite good text; do not translate; keep Persian typography. " +
-  "Reply JSON only: {\"ok\":boolean,\"major\":boolean,\"problems\":[short Persian strings],\"fixed_text\":string|null}. " +
+  "Think step by step but briefly: first fill \"notes\" (max 4 short strings: what you checked and found, line by line for the last 3 lines), THEN decide. A single leftover @id or link line at the end is ALWAYS a problem. When unsure whether a line is the owner's own, compare it with the owner's signature given below. "+
+  "Reply JSON only: {\"notes\":[string],\"ok\":boolean,\"major\":boolean,\"problems\":[short Persian strings],\"fixed_text\":string|null}. " +
   "major=true when publishing it as-is would embarrass the owner. fixed_text = the full corrected text (with the owner's signature) when YOU can fix it by editing the text, else null. If everything is fine: {\"ok\":true,\"major\":false,\"problems\":[],\"fixed_text\":null}.";
 
 export async function llmReview(env: Env, text: string, o: { own: string; task: string; lessons: string[]; hasMedia: boolean; agent: boolean }): Promise<Verdict | null> {

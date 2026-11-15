@@ -785,7 +785,7 @@ function ruleFix(text, own) {
 
 ${sig}`.trim() : body;
 }
-var REVIEW_SYS = `You are the strict supervisor/proof-reader of a Persian content channel. You receive ONE post (about to be published) and must judge it. Check: (1) leftover signature/@id/link/promotion of ANOTHER channel or site, anywhere (especially the last lines); (2) broken, cut-off or garbled sentences; (3) advertising or giveaway content; (4) text that contradicts today's date or the stated task; (5) repeated lines, stray symbols, template placeholders; (6) anything unprofessional. The owner's OWN signature lines (given below) are correct and must be kept exactly. Do not rewrite good text; do not translate; keep Persian typography. Reply JSON only: {"ok":boolean,"major":boolean,"problems":[short Persian strings],"fixed_text":string|null}. major=true when publishing it as-is would embarrass the owner. fixed_text = the full corrected text (with the owner's signature) when YOU can fix it by editing the text, else null. If everything is fine: {"ok":true,"major":false,"problems":[],"fixed_text":null}.`;
+var REVIEW_SYS = `You are the strict supervisor/proof-reader of a Persian content channel. You receive ONE post (about to be published) and must judge it. Check: (1) leftover signature/@id/link/promotion of ANOTHER channel or site, anywhere (especially the last lines); (2) broken, cut-off or garbled sentences; (3) advertising or giveaway content; (4) text that contradicts today's date or the stated task; (5) repeated lines, stray symbols, template placeholders; (6) anything unprofessional. The owner's OWN signature lines (given below) are correct and must be kept exactly. Do not rewrite good text; do not translate; keep Persian typography. Think step by step but briefly: first fill "notes" (max 4 short strings: what you checked and found, line by line for the last 3 lines), THEN decide. A single leftover @id or link line at the end is ALWAYS a problem. When unsure whether a line is the owner's own, compare it with the owner's signature given below. Reply JSON only: {"notes":[string],"ok":boolean,"major":boolean,"problems":[short Persian strings],"fixed_text":string|null}. major=true when publishing it as-is would embarrass the owner. fixed_text = the full corrected text (with the owner's signature) when YOU can fix it by editing the text, else null. If everything is fine: {"ok":true,"major":false,"problems":[],"fixed_text":null}.`;
 async function llmReview(env, text, o) {
   const user = `${lessonBlock(o.lessons)}TODAY (Tehran): ${new Date(Date.now() + 126e5).toISOString().slice(0, 10)}
 TASK THE POST WAS MADE FOR: ${o.task.slice(0, 400) || "(written by the owner)"}
@@ -1445,11 +1445,11 @@ async function onText(c, user, admin, state, d, text) {
     }
   }
 }
-async function onCallback(c, user, admin, q, act, arg, s) {
+async function onCallback(c, user, admin, q, act2, arg, s) {
   const { env } = c, uid = user.id, mid = q.message?.message_id;
   const ans = (t = "", alert = false) => answer(env, q.id, t, alert);
   if (!await llmReady(env)) return ans("\u0627\u06CC\u062C\u0646\u062A \u0647\u0646\u0648\u0632 \u0641\u0639\u0627\u0644 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A.", true);
-  if (act === "new") {
+  if (act2 === "new") {
     await ans();
     const list = await userChannels(env, uid);
     if (!user.eitaa_token_enc) return void await send(env, uid, "\u0627\u0628\u062A\u062F\u0627 \u0627\u0632 \xAB\u0628\u0631\u0646\u0627\u0645\u0647\u200C\u0647\u0627\u06CC \u0645\u062A\u0635\u0644\xBB \u062A\u0648\u06A9\u0646 \u0627\u06CC\u062A\u0627\u06CC\u0627\u0631 \u0631\u0627 \u062B\u0628\u062A \u06A9\u0646\u06CC\u062F.");
@@ -1458,21 +1458,21 @@ async function onCallback(c, user, admin, q, act, arg, s) {
     if (list.length === 1) return askInstruction(env, uid, { channel_id: list[0].id });
     return void await send(env, uid, "\u0627\u06CC\u062C\u0646\u062A \u062F\u0631 \u06A9\u062F\u0627\u0645 \u06A9\u0627\u0646\u0627\u0644 \u0634\u0645\u0627 \u067E\u0633\u062A \u0628\u06AF\u0630\u0627\u0631\u062F\u061F", ikb(list.map((ch) => [[`\u{1F7E0} ${ch.title}`.slice(0, 40), `ag:nc:${ch.id}`]])));
   }
-  if (act === "nc") {
+  if (act2 === "nc") {
     await ans();
     const ch = await getChannel(env, Number(arg));
     return ch && ch.user_id === uid ? askInstruction(env, uid, { channel_id: ch.id }) : void 0;
   }
-  if (act === "x") {
+  if (act2 === "x") {
     await clearSession(env, uid);
     await ans("\u0644\u063A\u0648 \u0634\u062F.");
     return void (mid && await edit(env, uid, mid, "\u0644\u063A\u0648 \u0634\u062F."));
   }
-  if (act === "redo") {
+  if (act2 === "redo") {
     await ans();
     return askInstruction(env, uid, { channel_id: s.data.channel_id });
   }
-  if (act === "mk") {
+  if (act2 === "mk") {
     if (s.state !== "ag_confirm" || !s.data.plan) return ans("\u0627\u06CC\u0646 \u067E\u06CC\u0634\u200C\u0646\u0648\u06CC\u0633 \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647\u061B \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u0627\u06CC\u062C\u0646\u062A \u062C\u062F\u06CC\u062F\xBB \u0628\u0632\u0646\u06CC\u062F.", true);
     if ((await userJobs(env, uid)).length >= MAX_JOBS) return ans(`\u062D\u062F\u0627\u06A9\u062B\u0631 ${MAX_JOBS} \u0627\u06CC\u062C\u0646\u062A \u0645\u062C\u0627\u0632 \u0627\u0633\u062A.`, true);
     const j2 = await createJob(env, uid, s.data);
@@ -1481,20 +1481,20 @@ async function onCallback(c, user, admin, q, act, arg, s) {
     if (mid) await edit(env, uid, mid, "\u2705 \u0627\u06CC\u062C\u0646\u062A \u0633\u0627\u062E\u062A\u0647 \u0634\u062F.");
     return show(env, uid, j2);
   }
-  if (act === "go" || act === "no") {
+  if (act2 === "go" || act2 === "no") {
     const pid = Number(arg);
-    const r = act === "go" ? await env.DB.prepare("UPDATE ea_posts SET status='pending', run_at=? WHERE id=? AND user_id=? AND status='draft'").bind(now(), pid, uid).run() : await env.DB.prepare("UPDATE ea_posts SET status='canceled' WHERE id=? AND user_id=? AND status='draft'").bind(pid, uid).run();
+    const r = act2 === "go" ? await env.DB.prepare("UPDATE ea_posts SET status='pending', run_at=? WHERE id=? AND user_id=? AND status='draft'").bind(now(), pid, uid).run() : await env.DB.prepare("UPDATE ea_posts SET status='canceled' WHERE id=? AND user_id=? AND status='draft'").bind(pid, uid).run();
     if (r.meta.changes) {
-      if (act === "go") await env.DB.prepare("UPDATE ea_posts SET status='pending', run_at=?, error='' WHERE error=? AND user_id=? AND status='draft'").bind(now() + 30, `follows:${pid}`, uid).run();
+      if (act2 === "go") await env.DB.prepare("UPDATE ea_posts SET status='pending', run_at=?, error='' WHERE error=? AND user_id=? AND status='draft'").bind(now() + 30, `follows:${pid}`, uid).run();
       else await env.DB.prepare("UPDATE ea_posts SET status='canceled' WHERE error=? AND user_id=? AND status='draft'").bind(`follows:${pid}`, uid).run();
     }
-    await ans(r.meta.changes ? act === "go" ? "\u062F\u0631 \u0635\u0641 \u0627\u0646\u062A\u0634\u0627\u0631 \u0642\u0631\u0627\u0631 \u06AF\u0631\u0641\u062A." : "\u062D\u0630\u0641 \u0634\u062F." : "\u0642\u0627\u0628\u0644 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u06CC\u0633\u062A.");
-    if (mid && r.meta.changes) await edit(env, uid, mid, act === "go" ? `\u{1F680} \u067E\u0633\u062A #${pid} \u062F\u0631 \u0635\u0641 \u0627\u0646\u062A\u0634\u0627\u0631 \u0627\u0633\u062A\u2026` : `\u{1F5D1} \u067E\u06CC\u0634\u200C\u0646\u0648\u06CC\u0633 #${pid} \u062D\u0630\u0641 \u0634\u062F.`);
+    await ans(r.meta.changes ? act2 === "go" ? "\u062F\u0631 \u0635\u0641 \u0627\u0646\u062A\u0634\u0627\u0631 \u0642\u0631\u0627\u0631 \u06AF\u0631\u0641\u062A." : "\u062D\u0630\u0641 \u0634\u062F." : "\u0642\u0627\u0628\u0644 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u06CC\u0633\u062A.");
+    if (mid && r.meta.changes) await edit(env, uid, mid, act2 === "go" ? `\u{1F680} \u067E\u0633\u062A #${pid} \u062F\u0631 \u0635\u0641 \u0627\u0646\u062A\u0634\u0627\u0631 \u0627\u0633\u062A\u2026` : `\u{1F5D1} \u067E\u06CC\u0634\u200C\u0646\u0648\u06CC\u0633 #${pid} \u062D\u0630\u0641 \u0634\u062F.`);
     return;
   }
   const j = await getJob(env, Number(arg));
   if (!j || j.user_id !== uid) return ans();
-  switch (act) {
+  switch (act2) {
     case "v":
       await ans();
       return show(env, uid, j);
@@ -1537,7 +1537,7 @@ async function onCallback(c, user, admin, q, act, arg, s) {
 }
 
 // eitaa-src/group.ts
-var TOPIC_NAMES = { posts: "\u{1F4DD} \u0645\u0637\u0627\u0644\u0628", reports: "\u{1F6A8} \u06AF\u0632\u0627\u0631\u0634\u0627\u062A", chat: "\u{1F4AC} \u0686\u062A \u0628\u0627 \u0627\u06CC\u062C\u0646\u062A", lessons: "\u{1F9E0} \u0622\u0645\u0648\u062E\u062A\u0647\u200C\u0647\u0627" };
+var TOPIC_NAMES = { posts: "\u{1F4DD} \u0645\u0637\u0627\u0644\u0628", reports: "\u{1F6A8} \u06AF\u0632\u0627\u0631\u0634\u0627\u062A", chat: "\u{1F4AC} \u0686\u062A \u0628\u0627 \u0627\u06CC\u062C\u0646\u062A", lessons: "\u{1F9E0} \u0622\u0645\u0648\u062E\u062A\u0647\u200C\u0647\u0627", council: "\u{1F91D} \u0634\u0648\u0631\u0627 (\u0646\u0627\u0638\u0631 \u0648 \u062F\u0633\u062A\u06CC\u0627\u0631)" };
 async function kvGet(env, k) {
   const r = await env.DB.prepare("SELECT v FROM ea_kv WHERE k=?").bind(k).first();
   return r ? r.v : null;
@@ -1587,23 +1587,26 @@ var manageKb = async (env, postId, label = "\u2699\uFE0F \u0645\u062F\u06CC\u063
   const u = await botUsername(env);
   return u ? { inline_keyboard: [[{ text: label, url: `https://t.me/${u}?start=ea_p${postId}` }]] } : void 0;
 };
-async function supToken(env, uid) {
-  const v = await kvGet(env, `sup:${uid}`);
+var ROLE_FA = { sup: "\u{1F6E1} \u0646\u0627\u0638\u0631", asst: "\u{1F9ED} \u062F\u0633\u062A\u06CC\u0627\u0631" };
+var roleName = (r) => r === "sup" || r === "asst" ? ROLE_FA[r] : r === "owner" ? "\u{1F464} \u0634\u0645\u0627" : "\u{1F916} \u0631\u0628\u0627\u062A";
+async function roleToken(env, uid, role) {
+  const v = await kvGet(env, `${role}:${uid}`);
   if (v) {
     const t = await dec(env.SECRET_KEY, v);
     if (t) return t;
   }
-  return env.SUPERVISOR_TOKEN || "";
+  return (role === "sup" ? env.SUPERVISOR_TOKEN : env.ASSISTANT_TOKEN) || "";
 }
-async function setSupervisor(env, uid, token) {
+var supToken = (env, uid) => roleToken(env, uid, "sup");
+async function setRoleBot(env, uid, role, token) {
   let me;
   try {
     me = await tgWith(env, token, "getMe");
   } catch (e) {
     return { ok: false, name: "", error: e.message, inGroup: null };
   }
-  await kvSet(env, `sup:${uid}`, await enc(env.SECRET_KEY, token));
-  await kvSet(env, `supname:${uid}`, me.username || "");
+  await kvSet(env, `${role}:${uid}`, await enc(env.SECRET_KEY, token));
+  await kvSet(env, `${role}name:${uid}`, me.username || "");
   const g = await getGroup(env, uid);
   let inGroup = null;
   if (g) {
@@ -1616,9 +1619,9 @@ async function setSupervisor(env, uid, token) {
   }
   return { ok: true, name: me.username || "", error: "", inGroup };
 }
-async function clearSupervisor(env, uid) {
-  await kvDel(env, `sup:${uid}`);
-  await kvDel(env, `supname:${uid}`);
+async function clearRoleBot(env, uid, role) {
+  await kvDel(env, `${role}:${uid}`);
+  await kvDel(env, `${role}name:${uid}`);
 }
 async function setupGroup(env, uid, chatId, title) {
   const prev = await getGroup(env, uid);
@@ -1656,6 +1659,7 @@ async function setupGroup(env, uid, chatId, title) {
   await say("posts", "\u{1F4DD} <b>\u0645\u0637\u0627\u0644\u0628</b>\n\u0647\u0631 \u067E\u0633\u062A\u06CC \u06A9\u0647 \u0642\u0631\u0627\u0631 \u0627\u0633\u062A \u062F\u0631 \u0627\u06CC\u062A\u0627 \u0645\u0646\u062A\u0634\u0631 \u0634\u0648\u062F\u060C \u0627\u0648\u0644 \u0627\u06CC\u0646\u200C\u062C\u0627 \u0645\u06CC\u200C\u0622\u06CC\u062F\u061B \u0632\u06CC\u0631 \u0647\u0631 \u067E\u0633\u062A \u06CC\u06A9 \u062F\u06A9\u0645\u0647\u200C\u06CC \xAB\u2699\uFE0F \u0645\u062F\u06CC\u0631\u06CC\u062A \u067E\u0633\u062A\xBB \u0627\u0633\u062A \u06A9\u0647 \u0634\u0645\u0627 \u0631\u0627 \u0628\u0647 \u0631\u0628\u0627\u062A \u0645\u06CC\u200C\u0628\u0631\u062F (\u06AF\u0632\u0627\u0631\u0634 \u062E\u0637\u0627\u060C \u062A\u0635\u062D\u06CC\u062D\u060C \u062D\u0630\u0641\u060C \u0627\u0641\u0632\u0648\u062F\u0646 \u0639\u06A9\u0633/\u0648\u06CC\u062F\u06CC\u0648).");
   await say("reports", "\u{1F6A8} <b>\u06AF\u0632\u0627\u0631\u0634\u0627\u062A</b>\n\u06AF\u0632\u0627\u0631\u0634 \u0646\u0627\u0638\u0631 \u062F\u0631\u0628\u0627\u0631\u0647\u200C\u06CC \u0627\u06CC\u0631\u0627\u062F\u0647\u0627\u06CC \u067E\u0633\u062A\u200C\u0647\u0627\u060C \u0627\u0635\u0644\u0627\u062D\u200C\u0647\u0627\u06CC \u062E\u0648\u062F\u06A9\u0627\u0631 \u0648 \u067E\u0633\u062A\u200C\u0647\u0627\u06CC\u06CC \u06A9\u0647 \u0627\u0631\u0633\u0627\u0644 \u0646\u0634\u062F\u0646\u062F \u0627\u06CC\u0646\u062C\u0627 \u0645\u06CC\u200C\u0622\u06CC\u062F.");
   await say("chat", "\u{1F4AC} <b>\u0686\u062A \u0628\u0627 \u0627\u06CC\u062C\u0646\u062A</b>\n\u0627\u06CC\u0646\u062C\u0627 \u0645\u062B\u0644 \xAB\u06AF\u0641\u062A\u06AF\u0648 \u0628\u0627 \u0627\u06CC\u062C\u0646\u062A\xBB \u062F\u0631 \u0631\u0628\u0627\u062A \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u06CC\u062F \u062F\u0633\u062A\u0648\u0631 \u0628\u062F\u0647\u06CC\u062F (\u0641\u0642\u0637 \u067E\u06CC\u0627\u0645 \u0634\u0645\u0627 \u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F).");
+  await say("council", "\u{1F91D} <b>\u0634\u0648\u0631\u0627</b>\n\u0627\u06CC\u0646\u062C\u0627 \xAB\u0646\u0627\u0638\u0631\xBB \u0648 \xAB\u062F\u0633\u062A\u06CC\u0627\u0631\xBB \u062F\u0631\u0628\u0627\u0631\u0647\u200C\u06CC \u0627\u06CC\u0631\u0627\u062F\u0647\u0627 \u0648 \u0622\u0645\u0648\u062E\u062A\u0647\u200C\u0647\u0627 \u0628\u0627 \u0647\u0645 \u06AF\u0641\u062A\u06AF\u0648 \u0645\u06CC\u200C\u06A9\u0646\u0646\u062F\u060C \u0628\u0647 \u0647\u0645 \u062F\u0633\u062A\u0648\u0631 \u0645\u06CC\u200C\u062F\u0647\u0646\u062F \u0648 \u0647\u0631 \u0648\u0642\u062A \u06A9\u0645\u06A9 \u06CC\u0627 \u0646\u0638\u0631 \u0634\u0645\u0627 \u0631\u0627 \u0628\u062E\u0648\u0627\u0647\u0646\u062F \u0627\u06CC\u0646\u062C\u0627 (\u0648 \u062F\u0631 \u0631\u0628\u0627\u062A) \u0645\u06CC\u200C\u067E\u0631\u0633\u0646\u062F. \u0647\u0631 \u067E\u06CC\u0627\u0645\u06CC \u06A9\u0647 \u0634\u0645\u0627 \u0627\u06CC\u0646\u062C\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F \u0628\u0647 \u0622\u0646\u200C\u0647\u0627 \u0645\u06CC\u200C\u0631\u0633\u062F.");
   await say("lessons", "\u{1F9E0} <b>\u0622\u0645\u0648\u062E\u062A\u0647\u200C\u0647\u0627</b>\n\u0647\u0631 \u062E\u0637\u0627\u06CC\u06CC \u06A9\u0647 \u06AF\u0632\u0627\u0631\u0634 \u06A9\u0646\u06CC\u062F \u0628\u0647 \u06CC\u06A9 \u0642\u0627\u0646\u0648\u0646 \u062A\u0628\u062F\u06CC\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u0627\u06CC\u0646\u062C\u0627 \u062B\u0628\u062A \u0645\u06CC\u200C\u0634\u0648\u062F \u062A\u0627 \u062A\u06A9\u0631\u0627\u0631 \u0646\u0634\u0648\u062F.");
   return `\u2705 \u0627\u06CC\u0646 \u06AF\u0631\u0648\u0647 \u0628\u0647\u200C\u0639\u0646\u0648\u0627\u0646 \u06AF\u0631\u0648\u0647 \u067E\u0633\u062A\u200C\u0647\u0627 \u062B\u0628\u062A \u0634\u062F.
 ${forum ? "\u062A\u0627\u067E\u06CC\u06A9\u200C\u0647\u0627: " + (Object.keys(cfg.topics).length ? "\u0633\u0627\u062E\u062A\u0647 \u0634\u062F" : "\u0633\u0627\u062E\u062A\u0647 \u0646\u0634\u062F") : "\u0628\u062F\u0648\u0646 \u062A\u0627\u067E\u06CC\u06A9"}${note}`;
@@ -1737,6 +1741,898 @@ async function setVerdict(env, postId, uid, verdict, note = "") {
   await env.DB.prepare("INSERT INTO ea_pubs(post_id,user_id,verdict,note,updated_at) VALUES(?,?,?,?,?) ON CONFLICT(post_id) DO UPDATE SET verdict=excluded.verdict, note=excluded.note, updated_at=excluded.updated_at").bind(postId, uid, verdict, note.slice(0, 400), now()).run();
 }
 var getPub = (env, postId) => env.DB.prepare("SELECT * FROM ea_pubs WHERE post_id=?").bind(postId).first();
+async function sayAs(env, uid, role, key2, text, kb) {
+  const cfg = await getGroup(env, uid);
+  if (!cfg) return false;
+  const own = role === "main" ? "" : await roleToken(env, uid, role);
+  if (own) {
+    try {
+      await sendTo(env, own, cfg, key2, text, kb);
+      return true;
+    } catch {
+    }
+  }
+  try {
+    await sendTo(env, env.BOT_TOKEN, cfg, key2, role === "main" ? text : `<b>${roleName(role)}</b>
+${text}`, kb);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+// eitaa-src/app.html
+var app_default = `<!doctype html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0b0d12">
+<title>\u067E\u0646\u0644 \u0627\u06CC\u062C\u0646\u062A \u0627\u06CC\u062A\u0627</title>
+<style>
+:root{--bg:#0b0d12;--bg2:#0f121a;--card:#131722;--card2:#171c29;--line:#222838;--text:#e9edf5;--mut:#8a93a8;--acc:#7c5cff;--acc2:#20d3c2;--ok:#34d399;--warn:#fbbf24;--bad:#f87171;--r:16px;--sh:0 10px 30px rgba(0,0,0,.35)}
+@media (prefers-color-scheme:light){:root:not([data-theme=dark]){--bg:#f4f6fb;--bg2:#fff;--card:#fff;--card2:#f7f8fc;--line:#e4e8f1;--text:#161a24;--mut:#667089;--sh:0 10px 30px rgba(30,40,80,.08)}}
+:root[data-theme=light]{--bg:#f4f6fb;--bg2:#fff;--card:#fff;--card2:#f7f8fc;--line:#e4e8f1;--text:#161a24;--mut:#667089;--sh:0 10px 30px rgba(30,40,80,.08)}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--text);font:15px/1.7 "Vazirmatn","Segoe UI",Tahoma,system-ui,sans-serif}
+body{min-height:100vh;background:radial-gradient(900px 500px at 85% -10%,rgba(124,92,255,.16),transparent 60%),radial-gradient(700px 400px at -10% 110%,rgba(32,211,194,.10),transparent 60%),var(--bg)}
+button,input,textarea,select{font:inherit;color:inherit}
+.app{max-width:1080px;margin:0 auto;padding:0 16px 96px}
+header{position:sticky;top:0;z-index:20;margin:0 -16px;padding:12px 16px;display:flex;align-items:center;gap:12px;background:color-mix(in srgb,var(--bg) 82%,transparent);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+.logo{width:34px;height:34px;border-radius:11px;background:linear-gradient(135deg,var(--acc),var(--acc2));display:grid;place-items:center;box-shadow:0 6px 18px rgba(124,92,255,.4)}
+.logo svg{width:18px;height:18px;stroke:#fff}
+header h1{font-size:16px;margin:0;font-weight:700}header small{color:var(--mut);display:block;font-size:12px;margin-top:-4px}
+.sp{flex:1}.dot{width:8px;height:8px;border-radius:50%;background:var(--ok);box-shadow:0 0 0 4px rgba(52,211,153,.15)}
+nav{position:fixed;inset:auto 0 0 0;z-index:30;display:flex;justify-content:space-around;gap:2px;padding:8px 8px calc(8px + env(safe-area-inset-bottom));background:color-mix(in srgb,var(--bg2) 90%,transparent);backdrop-filter:blur(16px);border-top:1px solid var(--line)}
+nav button{flex:1;background:none;border:0;border-radius:12px;padding:6px 2px;color:var(--mut);display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;cursor:pointer;position:relative}
+nav button svg{width:21px;height:21px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+nav button.on{color:var(--text)}nav button.on svg{stroke:url(#g)}
+nav button.on::after{content:"";position:absolute;top:-9px;width:22px;height:3px;border-radius:3px;background:linear-gradient(90deg,var(--acc),var(--acc2))}
+nav .badge{position:absolute;top:2px;right:calc(50% - 20px);background:var(--bad);color:#fff;border-radius:9px;font-size:10px;padding:0 5px;min-width:16px;text-align:center}
+@media(min-width:860px){nav{position:sticky;top:61px;inset:auto;margin:14px 0 0;border:1px solid var(--line);border-radius:18px;padding:6px;background:var(--card);gap:6px}nav button{flex-direction:row;justify-content:center;gap:8px;font-size:13px;padding:10px}nav button.on{background:var(--card2)}nav button.on::after{display:none}.app{padding-bottom:40px}}
+main{padding-top:18px;display:grid;gap:14px}
+.grid{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(150px,1fr))}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;box-shadow:var(--sh)}
+.card h3{margin:0 0 10px;font-size:14px;color:var(--mut);font-weight:600;display:flex;align-items:center;gap:8px}
+.stat b{display:block;font-size:28px;line-height:1.2;background:linear-gradient(135deg,var(--text),var(--mut));-webkit-background-clip:text;background-clip:text;color:transparent}
+.stat span{color:var(--mut);font-size:12.5px}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}.col{display:grid;gap:10px}
+.btn{border:1px solid var(--line);background:var(--card2);padding:8px 14px;border-radius:12px;cursor:pointer;font-size:13px;transition:.15s}
+.btn:hover{border-color:var(--acc)}.btn:active{transform:scale(.97)}
+.btn.pri{background:linear-gradient(135deg,var(--acc),#5a7bff);border-color:transparent;color:#fff;box-shadow:0 8px 20px rgba(124,92,255,.35)}
+.btn.bad{color:var(--bad)}.btn.sm{padding:5px 10px;font-size:12px;border-radius:10px}.btn:disabled{opacity:.5}
+.chip{border:1px solid var(--line);background:transparent;padding:5px 12px;border-radius:99px;font-size:12.5px;color:var(--mut);cursor:pointer}.chip.on{color:var(--text);background:var(--card2);border-color:var(--acc)}
+input,textarea,select{width:100%;background:var(--bg2);border:1px solid var(--line);border-radius:12px;padding:10px 12px;outline:none;transition:.15s}
+input:focus,textarea:focus{border-color:var(--acc);box-shadow:0 0 0 3px rgba(124,92,255,.18)}textarea{resize:vertical;min-height:110px;line-height:1.8}
+.badge2{font-size:11.5px;padding:2px 9px;border-radius:99px;border:1px solid var(--line);color:var(--mut);white-space:nowrap}
+.s-sent{color:var(--ok);border-color:rgba(52,211,153,.35);background:rgba(52,211,153,.08)}.s-held,.s-failed{color:var(--bad);border-color:rgba(248,113,113,.35);background:rgba(248,113,113,.08)}.s-pending,.s-sending{color:var(--warn);border-color:rgba(251,191,36,.35);background:rgba(251,191,36,.08)}
+.post{display:grid;gap:8px}.post .t{white-space:pre-wrap;word-break:break-word;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden;color:var(--text)}.post .t.open{-webkit-line-clamp:unset}
+.mut{color:var(--mut);font-size:12.5px}
+.chat{display:grid;gap:10px}.msg{display:flex;gap:10px;align-items:flex-start}
+.av{flex:none;width:34px;height:34px;border-radius:12px;display:grid;place-items:center;font-size:17px;background:var(--card2);border:1px solid var(--line)}
+.bub{background:var(--card2);border:1px solid var(--line);border-radius:4px 16px 16px 16px;padding:9px 13px;max-width:100%;white-space:pre-wrap;word-break:break-word}
+.msg .who{font-size:11.5px;color:var(--mut);margin-bottom:2px}
+.msg.owner .bub{background:linear-gradient(135deg,rgba(124,92,255,.22),rgba(32,211,194,.12));border-color:rgba(124,92,255,.4)}
+.ask{border:1px solid rgba(251,191,36,.4);background:rgba(251,191,36,.07);border-radius:14px;padding:12px;display:grid;gap:8px}
+.sw{position:relative;width:44px;height:26px;flex:none;border-radius:99px;background:var(--line);border:0;cursor:pointer;transition:.2s}.sw::after{content:"";position:absolute;top:3px;right:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}.sw.on{background:linear-gradient(135deg,var(--acc),var(--acc2))}.sw.on::after{right:21px}
+.modal{position:fixed;inset:0;z-index:50;background:rgba(5,7,12,.6);backdrop-filter:blur(6px);display:grid;place-items:end center;padding:0}
+@media(min-width:700px){.modal{place-items:center;padding:20px}}
+.sheet{width:min(560px,100%);max-height:92vh;overflow:auto;background:var(--card);border:1px solid var(--line);border-radius:22px 22px 0 0;padding:20px;display:grid;gap:12px;box-shadow:var(--sh);animation:up .22s ease}
+@media(min-width:700px){.sheet{border-radius:22px}}
+@keyframes up{from{transform:translateY(24px);opacity:0}to{transform:none;opacity:1}}
+.toast{position:fixed;inset:auto 0 88px;display:grid;place-items:center;z-index:80;pointer-events:none}.toast div{background:var(--text);color:var(--bg);padding:9px 16px;border-radius:99px;font-size:13px;box-shadow:var(--sh);animation:up .2s}
+.empty{text-align:center;color:var(--mut);padding:34px 10px}
+.lock{min-height:100vh;display:grid;place-items:center;padding:24px;text-align:center}.lock .card{max-width:420px}
+.skeleton{height:70px;border-radius:14px;background:linear-gradient(90deg,var(--card),var(--card2),var(--card));background-size:200% 100%;animation:sh 1.3s infinite}@keyframes sh{to{background-position:-200% 0}}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c5cff"/><stop offset="1" stop-color="#20d3c2"/></linearGradient></defs></svg>
+<div id="root"></div>
+<script>
+(function(){
+'use strict';
+var API='/app/api/', TOKEN='', S={tab:'home',st:null,filter:'',q:'',data:{}}, timer=null;
+try{var m=location.hash.match(/k=([\\w-]+)/);if(m){TOKEN=m[1];try{localStorage.setItem('ea_tk',TOKEN)}catch(e){}history.replaceState(null,'',location.pathname)}else{try{TOKEN=localStorage.getItem('ea_tk')||''}catch(e){}}}catch(e){}
+var ICON={home:'<path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/>',posts:'<rect x="4" y="3" width="16" height="18" rx="3"/><path d="M8 8h8M8 12h8M8 16h5"/>',brain:'<path d="M9 4a3 3 0 00-3 3 3 3 0 00-2 5 3 3 0 002 5 3 3 0 006 0V7a3 3 0 00-3-3z"/><path d="M15 4a3 3 0 013 3 3 3 0 012 5 3 3 0 01-2 5 3 3 0 01-3 2"/>',council:'<path d="M4 5h16v10H9l-5 4z"/><path d="M8 9h8M8 12h5"/>',bot:'<rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01"/>',cog:'<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/>'};
+var ic=function(n){return '<svg viewBox="0 0 24 24">'+ICON[n]+'</svg>'};
+function h(tag,a){var e=document.createElement(tag);a=a||{};for(var k in a){if(k==='class')e.className=a[k];else if(k==='html')e.innerHTML=a[k];else if(k.slice(0,2)==='on')e.addEventListener(k.slice(2),a[k]);else if(a[k]!==false&&a[k]!=null)e.setAttribute(k,a[k])}
+for(var i=2;i<arguments.length;i++){var c=arguments[i];if(c==null||c===false)continue;if(Array.isArray(c))c.forEach(function(x){x!=null&&e.append(x.nodeType?x:document.createTextNode(x))});else e.append(c.nodeType?c:document.createTextNode(c))}return e}
+function api(path,opt){opt=opt||{};return fetch(API+path,{method:opt.body?'POST':'GET',headers:{authorization:'Bearer '+TOKEN,'content-type':'application/json'},body:opt.body?JSON.stringify(opt.body):undefined}).then(function(r){if(r.status===401){lock();throw new Error('auth')}return r.json()})}
+function toast(t){var x=h('div',{class:'toast'},h('div',{},t));document.body.append(x);setTimeout(function(){x.remove()},2200)}
+var FA={sent:'\u0627\u0631\u0633\u0627\u0644\u200C\u0634\u062F\u0647',held:'\u0646\u06AF\u0647\u200C\u062F\u0627\u0634\u062A\u0647',pending:'\u062F\u0631 \u0635\u0641',sending:'\u062F\u0631 \u062D\u0627\u0644 \u0627\u0631\u0633\u0627\u0644',failed:'\u0646\u0627\u0645\u0648\u0641\u0642',deleted:'\u062D\u0630\u0641\u200C\u0634\u062F\u0647',replaced:'\u062C\u0627\u06CC\u06AF\u0632\u06CC\u0646\u200C\u0634\u062F\u0647',canceled:'\u0644\u063A\u0648',draft:'\u067E\u06CC\u0634\u200C\u0646\u0648\u06CC\u0633'};
+function ago(ts){if(!ts)return'';var d=Math.floor(Date.now()/1000)-ts;if(d<60)return'\u0644\u062D\u0638\u0627\u062A\u06CC \u067E\u06CC\u0634';if(d<3600)return Math.floor(d/60)+' \u062F\u0642\u06CC\u0642\u0647 \u067E\u06CC\u0634';if(d<86400)return Math.floor(d/3600)+' \u0633\u0627\u0639\u062A \u067E\u06CC\u0634';return Math.floor(d/86400)+' \u0631\u0648\u0632 \u067E\u06CC\u0634'}
+function lock(){clearInterval(timer);document.getElementById('root').replaceChildren(h('div',{class:'lock'},h('div',{class:'card col'},h('div',{class:'logo',style:'margin:0 auto',html:'<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>'}),h('h2',{style:'margin:0'},'\u062F\u0633\u062A\u0631\u0633\u06CC \u0644\u0627\u0632\u0645 \u0627\u0633\u062A'),h('div',{class:'mut'},'\u0644\u06CC\u0646\u06A9 \u0634\u0645\u0627 \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647 \u06CC\u0627 \u0646\u0627\u0645\u0639\u062A\u0628\u0631 \u0627\u0633\u062A. \u062F\u0631 \u0631\u0628\u0627\u062A \u0628\u0641\u0631\u0633\u062A\u06CC\u062F ',h('b',{},'/site'),' \u06CC\u0627 \u0627\u0632 \xAB\u{1F465} \u06AF\u0631\u0648\u0647 \u0648 \u0646\u0627\u0638\u0631 \u2190 \u{1F310} \u0633\u0627\u06CC\u062A \u0645\u0646\xBB \u0644\u06CC\u0646\u06A9 \u062A\u0627\u0632\u0647 \u0628\u06AF\u06CC\u0631\u06CC\u062F.'))))}
+function modal(title,body,actions){var m=h('div',{class:'modal',onclick:function(e){if(e.target===m)m.remove()}},h('div',{class:'sheet'},h('h3',{style:'margin:0'},title),body,h('div',{class:'row'},actions)));document.body.append(m);return m}
+function confirmBox(t,fn){var m;m=modal(t,h('span'),[h('button',{class:'btn bad',onclick:function(){m.remove();fn()}},'\u0628\u0644\u0647'),h('button',{class:'btn',onclick:function(){m.remove()}},'\u0627\u0646\u0635\u0631\u0627\u0641')])}
+
+function shell(){
+  var tabs=[['home','\u0646\u0645\u0627\u06CC \u06A9\u0644\u06CC','home'],['posts','\u067E\u0633\u062A\u200C\u0647\u0627','posts'],['lessons','\u0622\u0645\u0648\u062E\u062A\u0647\u200C\u0647\u0627','brain'],['council','\u0634\u0648\u0631\u0627','council'],['jobs','\u0627\u06CC\u062C\u0646\u062A\u200C\u0647\u0627','bot'],['settings','\u062A\u0646\u0638\u06CC\u0645\u0627\u062A','cog']];
+  var st=S.st||{};var open=(st.counts&&st.counts.asks)||0;
+  var nav=h('nav',{},tabs.map(function(t){return h('button',{class:S.tab===t[0]?'on':'',onclick:function(){S.tab=t[0];render()},html:ic(t[2])+'<span>'+t[1]+'</span>'+(t[0]==='council'&&open?'<i class="badge">'+open+'</i>':'')})}));
+  return h('div',{class:'app'},h('header',{},h('div',{class:'logo',html:'<svg viewBox="0 0 24 24" fill="none" stroke-width="2"><path d="M12 3l2.5 5.5L20 9l-4 4 1 6-5-3-5 3 1-6-4-4 5.5-.5z"/></svg>'}),h('div',{},h('h1',{},'\u0627\u06CC\u062C\u0646\u062A \u0627\u06CC\u062A\u0627'),h('small',{},st.user?st.user.name:'')),h('div',{class:'sp'}),h('span',{class:'dot'})),nav,h('main',{id:'view'}))}
+function render(){var r=document.getElementById('root');if(!document.getElementById('view')||!r.querySelector('nav')){r.replaceChildren(shell())}else{r.replaceChildren(shell())}load()}
+function view(el){var v=document.getElementById('view');v.replaceChildren.apply(v,[].concat(el))}
+function skel(){view([h('div',{class:'skeleton'}),h('div',{class:'skeleton'}),h('div',{class:'skeleton'})])}
+
+function load(){
+  var t=S.tab;
+  api('state').then(function(st){S.st=st;var open=st.counts.asks;var b=document.querySelector('nav .badge');
+    if(t==='home')return Promise.all([api('posts?limit=5'),api('council')]).then(function(r){S.data.recent=r[0].posts;S.data.council=r[1];draw()});
+    if(t==='posts')return api('posts?status='+encodeURIComponent(S.filter)+'&q='+encodeURIComponent(S.q)).then(function(r){S.data.posts=r.posts;draw()});
+    if(t==='lessons')return api('lessons').then(function(r){S.data.lessons=r.lessons;draw()});
+    if(t==='council')return api('council').then(function(r){S.data.council=r;draw()});
+    if(t==='jobs')return api('jobs').then(function(r){S.data.jobs=r.jobs;draw()});
+    draw()}).catch(function(e){console.error('ea',e);if(e.message!=='auth')view(h('div',{class:'empty'},'\u062E\u0637\u0627 \u062F\u0631 \u0628\u0627\u0631\u06AF\u0630\u0627\u0631\u06CC\u061B \u062F\u0648\u0628\u0627\u0631\u0647 \u062A\u0644\u0627\u0634 \u06A9\u0646\u06CC\u062F.'))})}
+function draw(){var f={home:vHome,posts:vPosts,lessons:vLessons,council:vCouncil,jobs:vJobs,settings:vSettings}[S.tab];view(f())}
+
+function badge(s){return h('span',{class:'badge2 s-'+s},FA[s]||s)}
+function bubble(m){var meta={sup:['\u{1F6E1}','\u0646\u0627\u0638\u0631'],asst:['\u{1F9ED}','\u062F\u0633\u062A\u06CC\u0627\u0631'],owner:['\u{1F464}','\u0634\u0645\u0627']}[m.role]||['\u{1F916}',m.role];return h('div',{class:'msg '+(m.role==='owner'?'owner':'')},h('div',{class:'av'},meta[0]),h('div',{},h('div',{class:'who'},meta[1]+' \xB7 '+ago(m.created_at)),h('div',{class:'bub'},m.text)))}
+
+function vHome(){var st=S.st,c=st.counts,rec=S.data.recent||[],co=S.data.council||{messages:[],asks:[]};
+  var out=[h('div',{class:'grid'},[['\u0627\u0631\u0633\u0627\u0644\u200C\u0634\u062F\u0647',c.sent],['\u0646\u06AF\u0647\u200C\u062F\u0627\u0634\u062A\u0647',c.held],['\u0622\u0645\u0648\u062E\u062A\u0647\u200C\u0647\u0627',c.lessons],['\u0633\u0624\u0627\u0644 \u0628\u06CC\u200C\u067E\u0627\u0633\u062E',c.asks]].map(function(x){return h('div',{class:'card stat'},h('b',{},String(x[1])),h('span',{},x[0]))}))];
+  if(!st.group)out.push(h('div',{class:'card col'},h('h3',{},'\u{1F465} \u06AF\u0631\u0648\u0647 \u0645\u062A\u0635\u0644 \u0646\u06CC\u0633\u062A'),h('div',{class:'mut'},'\u062F\u0631 \u06AF\u0631\u0648\u0647 \u062A\u0644\u06AF\u0631\u0627\u0645 (Topics \u0631\u0648\u0634\u0646\u060C \u0631\u0628\u0627\u062A \u0627\u062F\u0645\u06CC\u0646) \u062F\u0633\u062A\u0648\u0631 /eagroup \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u062A\u0627 \u067E\u0633\u062A\u200C\u0647\u0627 \u0627\u0648\u0644 \u062F\u0631 \u06AF\u0631\u0648\u0647 \u0628\u06CC\u0627\u06CC\u0646\u062F \u0648 \u0646\u0627\u0638\u0631 \u0628\u0631\u0631\u0633\u06CC \u06A9\u0646\u062F.')));
+  var open=(co.asks||[]).filter(function(a){return a.status==='open'});open.forEach(function(a){out.push(askCard(a))});
+  out.push(h('div',{class:'card'},h('h3',{},'\u{1F91D} \u0622\u062E\u0631\u06CC\u0646 \u06AF\u0641\u062A\u06AF\u0648\u06CC \u0634\u0648\u0631\u0627'),h('div',{class:'chat'},(co.messages||[]).slice(-4).map(bubble)),!(co.messages||[]).length&&h('div',{class:'mut'},'\u0647\u0646\u0648\u0632 \u06AF\u0641\u062A\u06AF\u0648\u06CC\u06CC \u0646\u0628\u0648\u062F\u0647.')));
+  out.push(h('div',{class:'card col'},h('h3',{},'\u{1F4DD} \u0622\u062E\u0631\u06CC\u0646 \u067E\u0633\u062A\u200C\u0647\u0627'),rec.length?rec.map(postCard):h('div',{class:'mut'},'\u067E\u0633\u062A\u06CC \u0646\u06CC\u0633\u062A.')));
+  return out}
+function askCard(a){var inp=h('input',{placeholder:'\u067E\u0627\u0633\u062E \u0634\u0645\u0627\u2026'});return h('div',{class:'ask'},h('b',{},'\u2753 '+(a.role==='asst'?'\u062F\u0633\u062A\u06CC\u0627\u0631':'\u0646\u0627\u0638\u0631')+' \u0627\u0632 \u0634\u0645\u0627 \u06A9\u0645\u06A9 \u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u062F'),h('div',{},a.question),h('div',{class:'row'},inp,h('button',{class:'btn pri sm',onclick:function(){if(!inp.value.trim())return;api('ask',{body:{id:a.id,answer:inp.value}}).then(function(){toast('\u067E\u0627\u0633\u062E \u0628\u0647 \u0634\u0648\u0631\u0627 \u0631\u0633\u06CC\u062F');load()})}},'\u0627\u0631\u0633\u0627\u0644'),h('button',{class:'btn sm',onclick:function(){api('ask',{body:{id:a.id,skip:true}}).then(load)}},'\u0646\u0627\u062F\u06CC\u062F\u0647')))}
+
+function postCard(p){
+  var t=h('div',{class:'t',onclick:function(){t.classList.toggle('open')}},p.text||(p.kind==='file'?'\u{1F4CE} '+(p.file_name||'\u0641\u0627\u06CC\u0644'):'(\u0628\u062F\u0648\u0646 \u0645\u062A\u0646)'));
+  var acts=[];
+  if(['sent','held','pending','failed'].indexOf(p.status)>=0){
+    acts.push(h('button',{class:'btn sm',onclick:function(){editPost(p)}},'\u270F\uFE0F \u0648\u06CC\u0631\u0627\u06CC\u0634'));
+    if(p.status==='held')acts.push(h('button',{class:'btn sm',onclick:function(){api('post/'+p.id+'/send',{body:{}}).then(function(r){toast(r.message||'\u062F\u0631 \u0635\u0641 \u0642\u0631\u0627\u0631 \u06AF\u0631\u0641\u062A');load()})}},'\u{1F680} \u0627\u0631\u0633\u0627\u0644'));
+    acts.push(h('button',{class:'btn sm bad',onclick:function(){confirmBox('\u067E\u0633\u062A #'+p.id+' \u062D\u0630\u0641 \u0634\u0648\u062F\u061F',function(){api('post/'+p.id+'/delete',{body:{}}).then(function(r){toast(r.message||'\u062D\u0630\u0641 \u0634\u062F');load()})})}},'\u{1F5D1} \u062D\u0630\u0641'))}
+  return h('div',{class:'card post'},h('div',{class:'row'},badge(p.status),p.kind==='file'?h('span',{class:'badge2'},'\u{1F4CE} \u0631\u0633\u0627\u0646\u0647'):null,p.verdict==='fixed'?h('span',{class:'badge2'},'\u270F\uFE0F \u0627\u0635\u0644\u0627\u062D \u0646\u0627\u0638\u0631'):null,h('span',{class:'mut'},'#'+p.id+' \xB7 '+(p.channel||'')+' \xB7 '+ago(p.sent_at||p.created_at))),t,p.error&&p.status!=='sent'?h('div',{class:'mut'},'\u26A0\uFE0F '+p.error):null,acts.length?h('div',{class:'row'},acts):null)}
+function editPost(p){var ta=h('textarea',{},p.text);var m=modal('\u0648\u06CC\u0631\u0627\u06CC\u0634 \u067E\u0633\u062A #'+p.id,h('div',{class:'col'},h('div',{class:'mut'},'\u0627\u06CC\u062A\u0627 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u067E\u06CC\u0627\u0645 \u0631\u0627 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0646\u0645\u06CC\u200C\u06A9\u0646\u062F\u061B \u067E\u06CC\u0627\u0645 \u0642\u0628\u0644\u06CC \u062D\u0630\u0641 \u0648 \u067E\u0633\u062A \u062F\u0631\u0633\u062A\u200C\u0634\u062F\u0647 \u062F\u0648\u0628\u0627\u0631\u0647 \u0627\u0631\u0633\u0627\u0644 \u0645\u06CC\u200C\u0634\u0648\u062F (\u0627\u0648\u0644 \u06AF\u0631\u0648\u0647\u060C \u0628\u0639\u062F \u0646\u0627\u0638\u0631\u060C \u0628\u0639\u062F \u0627\u06CC\u062A\u0627).'),ta,p.kind==='file'?h('div',{class:'mut'},'\u0628\u0631\u0627\u06CC \u0639\u0648\u0636\u200C\u06A9\u0631\u062F\u0646 \u0639\u06A9\u0633/\u0648\u06CC\u062F\u06CC\u0648 \u0627\u0632 \u062F\u06A9\u0645\u0647\u200C\u06CC \xAB\u0645\u062F\u06CC\u0631\u06CC\u062A \u067E\u0633\u062A\xBB \u062F\u0631 \u06AF\u0631\u0648\u0647 \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F. (\u0645\u062A\u0646 \u0647\u0645\u0631\u0627\u0647 \u0631\u0633\u0627\u0646\u0647 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647)'):null),[h('button',{class:'btn pri',onclick:function(){api('post/'+p.id+'/edit',{body:{text:ta.value}}).then(function(r){m.remove();toast(r.message||r.error||'\u0627\u0646\u062C\u0627\u0645 \u0634\u062F');load()})}},'\u0630\u062E\u06CC\u0631\u0647 \u0648 \u0627\u0631\u0633\u0627\u0644 \u0645\u062C\u062F\u062F'),h('button',{class:'btn',onclick:function(){m.remove()}},'\u0627\u0646\u0635\u0631\u0627\u0641')])}
+function vPosts(){var chips=[['','\u0647\u0645\u0647'],['sent','\u0627\u0631\u0633\u0627\u0644\u200C\u0634\u062F\u0647'],['held','\u0646\u06AF\u0647\u200C\u062F\u0627\u0634\u062A\u0647'],['pending','\u062F\u0631 \u0635\u0641'],['failed','\u0646\u0627\u0645\u0648\u0641\u0642']];var q=h('input',{placeholder:'\u062C\u0633\u062A\u062C\u0648 \u062F\u0631 \u0645\u062A\u0646 \u067E\u0633\u062A\u200C\u0647\u0627\u2026',value:S.q});q.addEventListener('keydown',function(e){if(e.key==='Enter'){S.q=q.value;load()}});
+  return [h('div',{class:'col'},q,h('div',{class:'row'},chips.map(function(c){return h('button',{class:'chip '+(S.filter===c[0]?'on':''),onclick:function(){S.filter=c[0];load()}},c[1])}))),(S.data.posts||[]).length?(S.data.posts).map(postCard):h('div',{class:'empty'},'\u067E\u0633\u062A\u06CC \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F.')]}
+
+function vLessons(){var L=S.data.lessons||[];var inp=h('input',{placeholder:'\u0642\u0627\u0646\u0648\u0646 \u062A\u0627\u0632\u0647\u2026 \u0645\u062B\u0644\u0627\u064B \xAB\u0622\u062E\u0631 \u0645\u062A\u0646 \u0622\u06CC\u062F\u06CC \u06A9\u0627\u0646\u0627\u0644 \u062F\u06CC\u06AF\u0631 \u0646\u06AF\u0630\u0627\u0631\xBB'});
+  var add=function(){if(inp.value.trim().length<6)return toast('\u0642\u0627\u0646\u0648\u0646 \u062E\u06CC\u0644\u06CC \u06A9\u0648\u062A\u0627\u0647 \u0627\u0633\u062A');api('lesson',{body:{op:'add',rule:inp.value}}).then(function(r){toast(r.ok?'\u0627\u0636\u0627\u0641\u0647 \u0634\u062F':'\u062A\u06A9\u0631\u0627\u0631\u06CC \u06CC\u0627 \u0646\u0627\u0645\u0639\u062A\u0628\u0631');load()})};inp.addEventListener('keydown',function(e){if(e.key==='Enter')add()});
+  return [h('div',{class:'card col'},h('h3',{},'\u{1F9E0} \u0622\u0645\u0648\u062E\u062A\u0647\u200C\u0647\u0627'),h('div',{class:'mut'},'\u0647\u0631\u0686\u0647 \u0627\u06CC\u062C\u0646\u062A\u200C\u0647\u0627 \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u0647\u200C\u0627\u0646\u062F. \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u06CC\u062F \u0647\u0631 \u0642\u0627\u0646\u0648\u0646 \u0631\u0627 \u0648\u06CC\u0631\u0627\u06CC\u0634 \u06CC\u0627 \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F \u06CC\u0627 \u0642\u0627\u0646\u0648\u0646 \u062A\u0627\u0632\u0647 \u0628\u062F\u0647\u06CC\u062F\u061B \u062F\u0631 \u067E\u0631\u0627\u0645\u067E\u062A \u0627\u06CC\u062C\u0646\u062A \u0648 \u0628\u0631\u0631\u0633\u06CC \u0646\u0627\u0638\u0631 \u062F\u06CC\u062F\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F.'),h('div',{class:'row'},inp,h('button',{class:'btn pri',onclick:add},'\u0627\u0641\u0632\u0648\u062F\u0646'))),
+    L.length?L.map(function(l){return h('div',{class:'card row'},h('div',{style:'flex:1;min-width:200px'},h('div',{},l.rule),h('div',{class:'mut'},(l.source&&l.source.indexOf('council')===0?'\u{1F91D} \u0634\u0648\u0631\u0627':l.source==='owner'?'\u{1F464} \u0634\u0645\u0627':'\u{1F6A9} \u06AF\u0632\u0627\u0631\u0634 \u062E\u0637\u0627')+' \xB7 '+ago(l.created_at))),h('button',{class:'btn sm',onclick:function(){var ta=h('textarea',{style:'min-height:80px'},l.rule);var m=modal('\u0648\u06CC\u0631\u0627\u06CC\u0634 \u0642\u0627\u0646\u0648\u0646',ta,[h('button',{class:'btn pri',onclick:function(){api('lesson',{body:{op:'edit',id:l.id,rule:ta.value}}).then(function(){m.remove();load()})}},'\u0630\u062E\u06CC\u0631\u0647'),h('button',{class:'btn',onclick:function(){m.remove()}},'\u0627\u0646\u0635\u0631\u0627\u0641')])}},'\u270F\uFE0F'),h('button',{class:'btn sm bad',onclick:function(){api('lesson',{body:{op:'delete',id:l.id}}).then(function(){toast('\u0641\u0631\u0627\u0645\u0648\u0634 \u0634\u062F');load()})}},'\u{1F5D1}'))}):h('div',{class:'empty'},'\u0647\u0646\u0648\u0632 \u0686\u06CC\u0632\u06CC \u06CC\u0627\u062F \u0646\u06AF\u0631\u0641\u062A\u0647\u200C\u0627\u0646\u062F.')]}
+
+function vCouncil(){var co=S.data.council||{messages:[],asks:[]};var inp=h('input',{placeholder:'\u0628\u0647 \u0646\u0627\u0638\u0631 \u0648 \u062F\u0633\u062A\u06CC\u0627\u0631 \u0628\u06AF\u0648\u06CC\u06CC\u062F\u2026'});
+  var say=function(){if(!inp.value.trim())return;api('council/say',{body:{text:inp.value}}).then(function(){inp.value='';toast('\u0628\u0647 \u0634\u0648\u0631\u0627 \u0631\u0633\u06CC\u062F\u061B \u062A\u0627 \u06CC\u06A9 \u062F\u0642\u06CC\u0642\u0647\u200C\u06CC \u062F\u06CC\u06AF\u0631 \u067E\u0627\u0633\u062E \u0645\u06CC\u200C\u062F\u0647\u0646\u062F');load()})};inp.addEventListener('keydown',function(e){if(e.key==='Enter')say()});
+  var open=(co.asks||[]).filter(function(a){return a.status==='open'}).map(askCard);
+  return [].concat(open,[h('div',{class:'card col'},h('div',{class:'row'},h('h3',{style:'margin:0;flex:1'},'\u{1F91D} \u0634\u0648\u0631\u0627\u06CC \u0646\u0627\u0638\u0631 \u0648 \u062F\u0633\u062A\u06CC\u0627\u0631'),h('button',{class:'btn sm',onclick:function(){api('council/run',{body:{}}).then(function(r){toast(r.message||'\u062C\u0644\u0633\u0647 \u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0634\u062F')})}},'\u062C\u0644\u0633\u0647\u200C\u06CC \u062A\u0627\u0632\u0647')),h('div',{class:'chat'},(co.messages||[]).length?co.messages.map(bubble):h('div',{class:'empty'},'\u0647\u0646\u0648\u0632 \u062C\u0644\u0633\u0647\u200C\u0627\u06CC \u0646\u0628\u0648\u062F\u0647. \u0628\u0627 \u0647\u0631 \u062E\u0637\u0627 \u06CC\u0627 \u0647\u0631 \u0631\u0648\u0632 \u06CC\u06A9 \u0628\u0627\u0631 \u062E\u0648\u062F\u06A9\u0627\u0631 \u0628\u0631\u06AF\u0632\u0627\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F.')),h('div',{class:'row'},inp,h('button',{class:'btn pri',onclick:say},'\u0627\u0631\u0633\u0627\u0644')))])}
+
+function vJobs(){var J=S.data.jobs||[];if(!J.length)return h('div',{class:'empty'},'\u0627\u06CC\u062C\u0646\u062A\u06CC \u0646\u062F\u0627\u0631\u06CC\u062F. \u062F\u0631 \u0631\u0628\u0627\u062A \u0627\u0632 \xAB\u{1F916} \u0627\u06CC\u062C\u0646\u062A\xBB \u06CC\u06A9\u06CC \u0628\u0633\u0627\u0632\u06CC\u062F.');
+  return J.map(function(j){return h('div',{class:'card col'},h('div',{class:'row'},h('b',{style:'flex:1'},j.name||('\u0627\u06CC\u062C\u0646\u062A #'+j.id)),h('button',{class:'sw '+(j.enabled?'on':''),onclick:function(){api('job',{body:{op:'toggle',id:j.id}}).then(load)}})),h('div',{class:'mut',style:'white-space:pre-wrap'},j.instruction),h('div',{class:'mut'},'\u23F0 '+(j.times||'\u2014')+(j.last_info?' \xB7 '+j.last_info:'')),h('div',{class:'row'},h('button',{class:'btn sm',onclick:function(){api('job',{body:{op:'run',id:j.id}}).then(function(){toast('\u062A\u0627 \u06CC\u06A9 \u062F\u0642\u06CC\u0642\u0647\u200C\u06CC \u062F\u06CC\u06AF\u0631 \u0627\u062C\u0631\u0627 \u0645\u06CC\u200C\u0634\u0648\u062F')})}},'\u25B6 \u0627\u062C\u0631\u0627 \u06A9\u0646'),h('button',{class:'btn sm',onclick:function(){var ta=h('textarea',{},j.instruction);var m=modal('\u0648\u06CC\u0631\u0627\u06CC\u0634 \u062F\u0633\u062A\u0648\u0631 \u0627\u06CC\u062C\u0646\u062A',ta,[h('button',{class:'btn pri',onclick:function(){api('job',{body:{op:'edit',id:j.id,instruction:ta.value}}).then(function(){m.remove();load()})}},'\u0630\u062E\u06CC\u0631\u0647'),h('button',{class:'btn',onclick:function(){m.remove()}},'\u0627\u0646\u0635\u0631\u0627\u0641')])}},'\u270F\uFE0F \u062F\u0633\u062A\u0648\u0631'),h('button',{class:'btn sm bad',onclick:function(){confirmBox('\u0627\u06CC\u0646 \u0627\u06CC\u062C\u0646\u062A \u062D\u0630\u0641 \u0634\u0648\u062F\u061F',function(){api('job',{body:{op:'delete',id:j.id}}).then(load)})}},'\u{1F5D1}')))})}
+
+function botBox(role,fa,info){var inp=h('input',{placeholder:'\u062A\u0648\u06A9\u0646 \u0631\u0628\u0627\u062A '+fa+' (\u0627\u0632 BotFather)',dir:'ltr'});return h('div',{class:'col'},h('div',{class:'row'},h('b',{},(role==='sup'?'\u{1F6E1} ':'\u{1F9ED} ')+fa),h('span',{class:'mut'},info.has?'\u2705 '+(info.name?'@'+info.name:'\u062B\u0628\u062A \u0634\u062F\u0647'):'\u0631\u0628\u0627\u062A \u062C\u062F\u0627 \u0646\u062F\u0627\u0631\u062F (\u0647\u0645\u06CC\u0646 \u0631\u0628\u0627\u062A \u0645\u06CC\u200C\u0646\u0648\u06CC\u0633\u062F)')),h('div',{class:'row'},inp,h('button',{class:'btn pri sm',onclick:function(){api('settings',{body:{role:role,token:inp.value}}).then(function(r){toast(r.message||r.error||'\u0627\u0646\u062C\u0627\u0645 \u0634\u062F');load()})}},'\u062B\u0628\u062A'),info.has?h('button',{class:'btn sm bad',onclick:function(){api('settings',{body:{role:role,clear:true}}).then(load)}},'\u062D\u0630\u0641'):null))}
+function vSettings(){var st=S.st,g=st.group;
+  return [h('div',{class:'card col'},h('h3',{},'\u{1F465} \u06AF\u0631\u0648\u0647'),g?h('div',{},'\u2705 '+(g.title||g.chat)+(g.forum?' \xB7 \u062A\u0627\u067E\u06CC\u06A9\u200C\u0647\u0627':' \xB7 \u0628\u062F\u0648\u0646 \u062A\u0627\u067E\u06CC\u06A9')):h('div',{class:'mut'},'\u0645\u062A\u0635\u0644 \u0646\u06CC\u0633\u062A. \u062F\u0631 \u06AF\u0631\u0648\u0647 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F /eagroup'),g&&h('div',{class:'row'},h('b',{style:'flex:1'},'\u0628\u0631\u0631\u0633\u06CC \u0646\u0627\u0638\u0631 \u067E\u06CC\u0634 \u0627\u0632 \u0627\u06CC\u062A\u0627'),h('button',{class:'sw '+(g.review?'on':''),onclick:function(){api('settings',{body:{review:!g.review}}).then(load)}}))),
+    h('div',{class:'card col'},h('h3',{},'\u{1F916} \u0631\u0628\u0627\u062A\u200C\u0647\u0627\u06CC \u06AF\u0631\u0648\u0647'),botBox('sup','\u0646\u0627\u0638\u0631',st.sup),h('hr',{style:'border:0;border-top:1px solid var(--line);width:100%'}),botBox('asst','\u062F\u0633\u062A\u06CC\u0627\u0631',st.asst),h('div',{class:'mut'},'\u0647\u0631 \u0631\u0628\u0627\u062A \u0631\u0627 \u062F\u0631 BotFather \u0628\u0633\u0627\u0632\u06CC\u062F\u060C \u062A\u0648\u06A9\u0646 \u0631\u0627 \u0627\u06CC\u0646\u062C\u0627 \u0628\u062F\u0647\u06CC\u062F \u0648 \u062F\u0631 \u06AF\u0631\u0648\u0647 \u0627\u062F\u0645\u06CC\u0646 \u06A9\u0646\u06CC\u062F.')),
+    h('div',{class:'card row'},h('b',{style:'flex:1'},'\u0638\u0627\u0647\u0631'),h('button',{class:'btn sm',onclick:function(){var d=document.documentElement,c=d.getAttribute('data-theme')==='light'?'dark':'light';d.setAttribute('data-theme',c);try{localStorage.setItem('ea_th',c)}catch(e){}}},'\u062A\u06CC\u0631\u0647 / \u0631\u0648\u0634\u0646'),h('button',{class:'btn sm bad',onclick:function(){try{localStorage.removeItem('ea_tk')}catch(e){}TOKEN='';lock()}},'\u062E\u0631\u0648\u062C'))]}
+
+try{var th=localStorage.getItem('ea_th');if(th)document.documentElement.setAttribute('data-theme',th)}catch(e){}
+if(!TOKEN)lock();else{render();timer=setInterval(function(){if(!document.hidden&&!document.querySelector('.modal')&&document.activeElement&&document.activeElement.tagName!=='INPUT'&&document.activeElement.tagName!=='TEXTAREA')load()},25000)}
+})();
+<\/script>
+</body>
+</html>
+`;
+
+// eitaa-src/web.ts
+var appPage = () => new Response(app_default, { headers: { "content-type": "text/html; charset=utf-8", "cache-control": "no-store", "x-frame-options": "DENY", "referrer-policy": "no-referrer" } });
+var sha = async (s) => [...new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s)))].map((b) => b.toString(16).padStart(2, "0")).join("");
+var TTL = 7 * 86400;
+async function siteLink(env, uid) {
+  const base = (env.WORKER_URL || "").replace(/\/$/, "");
+  if (!base) return "\u274C \u0622\u062F\u0631\u0633 Worker (WORKER_URL) \u062A\u0646\u0638\u06CC\u0645 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A\u061B \u0646\u0635\u0628 \u0631\u0627 \u0628\u0627 setup.mjs \u062F\u0648\u0628\u0627\u0631\u0647 \u0627\u062C\u0631\u0627 \u06A9\u0646\u06CC\u062F.";
+  const raw = crypto.getRandomValues(new Uint8Array(24));
+  const token = btoa(String.fromCharCode(...raw)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+  await kvSet(env, `web:${await sha(token)}`, JSON.stringify({ uid, exp: now() + TTL }));
+  return `\u{1F310} <b>\u0633\u0627\u06CC\u062A \u0634\u062E\u0635\u06CC \u0634\u0645\u0627</b>
+
+${base}/app#k=${token}
+
+\u{1F510} \u0627\u06CC\u0646 \u0644\u06CC\u0646\u06A9 \u0641\u0642\u0637 \u0645\u062E\u0635\u0648\u0635 \u0634\u0645\u0627\u0633\u062A (\u06F7 \u0631\u0648\u0632 \u0627\u0639\u062A\u0628\u0627\u0631)\u061B \u0628\u0647 \u06A9\u0633\u06CC \u0646\u062F\u0647\u06CC\u062F. \u0644\u06CC\u0646\u06A9 \u062A\u0627\u0632\u0647: /site`;
+}
+var J = (o, status = 200) => new Response(JSON.stringify(o), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
+async function auth(env, request) {
+  const t = (request.headers.get("authorization") || "").replace(/^Bearer\s+/i, "").trim();
+  if (!/^[\w-]{20,}$/.test(t)) return null;
+  const key2 = `web:${await sha(t)}`, v = await kvGet(env, key2);
+  if (!v) return null;
+  try {
+    const o = JSON.parse(v);
+    if (o.exp > now()) return o.uid;
+  } catch {
+  }
+  await kvDel(env, key2);
+  return null;
+}
+var ROLE_OK = (r) => r === "sup" || r === "asst";
+async function api(env, request, path) {
+  const uid = await auth(env, request);
+  if (uid === null) return J({ error: "unauthorized" }, 401);
+  const url = new URL(request.url), post = request.method === "POST";
+  let body = {};
+  if (post) {
+    try {
+      body = await request.json();
+    } catch {
+      body = {};
+    }
+  }
+  const db = env.DB, int = (x) => Math.trunc(Number(x));
+  if (path === "state") {
+    const u = await db.prepare("SELECT id, name, username FROM ea_users WHERE id=?").bind(uid).first();
+    const g = await getGroup(env, uid);
+    const n = async (sql) => (await db.prepare(sql).bind(uid).first())?.n || 0;
+    const bot = async (r) => ({ has: !!await roleToken(env, uid, r), name: await kvGet(env, `${r}name:${uid}`) || "" });
+    return J({
+      user: u || { id: uid, name: "", username: "" },
+      group: g ? { title: g.title || g.chat, chat: g.chat, forum: g.forum, review: g.review } : null,
+      sup: await bot("sup"),
+      asst: await bot("asst"),
+      counts: { sent: await n("SELECT COUNT(*) n FROM ea_posts WHERE user_id=? AND status='sent'"), held: await n("SELECT COUNT(*) n FROM ea_posts WHERE user_id=? AND status='held'"), lessons: await n("SELECT COUNT(*) n FROM ea_lessons WHERE user_id=?"), asks: await n("SELECT COUNT(*) n FROM ea_asks WHERE user_id=? AND status='open'") }
+    });
+  }
+  if (path === "posts") {
+    const st = url.searchParams.get("status") || "", q = (url.searchParams.get("q") || "").slice(0, 60), lim = Math.min(int(url.searchParams.get("limit") || 60) || 60, 100);
+    const rows = await db.prepare(`SELECT p.id, p.kind, p.text, p.status, p.sent_at, p.created_at, p.error, p.job_id, p.file_name, c.title channel, COALESCE(u.verdict,'') verdict FROM ea_posts p LEFT JOIN ea_channels c ON c.id=p.channel_id LEFT JOIN ea_pubs u ON u.post_id=p.id WHERE p.user_id=?1 ${st ? "AND p.status=?2" : "AND ?2=?2"} ${q ? "AND p.text LIKE ?3" : "AND ?3=?3"} AND p.status NOT IN ('replaced','deleted','canceled') ORDER BY p.id DESC LIMIT ${lim}`).bind(uid, st || "x", q ? `%${q.replace(/[%_]/g, "")}%` : "x").all();
+    return J({ posts: rows.results });
+  }
+  let m = path.match(/^post\/(\d+)\/(delete|edit|send)$/);
+  if (m && post) {
+    const id = Number(m[1]);
+    const p = await db.prepare("SELECT * FROM ea_posts WHERE id=? AND user_id=?").bind(id, uid).first();
+    if (!p || !["sent", "held", "pending", "failed"].includes(p.status)) return J({ error: "\u0627\u06CC\u0646 \u067E\u0633\u062A \u0642\u0627\u0628\u0644 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u06CC\u0633\u062A" }, 400);
+    if (m[2] === "delete") {
+      const r2 = await removePost(env, p, "deleted");
+      await setVerdict(env, id, uid, "deleted");
+      return J({ ok: true, message: r2.eitaa === "manual" ? "\u0627\u0632 \u06AF\u0631\u0648\u0647 \u062D\u0630\u0641 \u0634\u062F\u061B \u0627\u06CC\u062A\u0627\u06CC\u0627\u0631 \u062D\u0630\u0641 \u067E\u06CC\u0627\u0645 \u0646\u062F\u0627\u0631\u062F\u060C \u0646\u0633\u062E\u0647\u200C\u06CC \u0627\u06CC\u062A\u0627 \u0631\u0627 \u062F\u0633\u062A\u06CC \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F" : r2.eitaa === "removed" ? "\u0627\u0632 \u06AF\u0631\u0648\u0647 \u0648 \u0627\u06CC\u062A\u0627 \u062D\u0630\u0641 \u0634\u062F" : "\u062D\u0630\u0641 \u0634\u062F" });
+    }
+    if (m[2] === "send") {
+      if (p.status !== "held") return J({ error: "\u0627\u06CC\u0646 \u067E\u0633\u062A \u0646\u06AF\u0647\u200C\u062F\u0627\u0634\u062A\u0647 \u0646\u0634\u062F\u0647" }, 400);
+      if (p.kind === "file" && (await db.prepare("SELECT verdict FROM ea_pubs WHERE post_id=?").bind(id).first())?.verdict === "held_media") {
+        if (!String(p.text).trim()) return J({ error: "\u0645\u062A\u0646\u06CC \u0646\u062F\u0627\u0631\u062F\u061B \u0627\u0632 \u0631\u0628\u0627\u062A \u0631\u0633\u0627\u0646\u0647\u200C\u06CC \u062A\u0627\u0632\u0647 \u0628\u062F\u0647\u06CC\u062F" }, 400);
+        await db.prepare("UPDATE ea_posts SET kind='text', file_id='', src_url='', file_name='' WHERE id=?").bind(id).run();
+      }
+      await setVerdict(env, id, uid, "forced");
+      await db.prepare("UPDATE ea_posts SET status='pending', run_at=?, error='' WHERE id=?").bind(now(), id).run();
+      return J({ ok: true, message: "\u062F\u0631 \u0635\u0641 \u0627\u0631\u0633\u0627\u0644 \u0642\u0631\u0627\u0631 \u06AF\u0631\u0641\u062A" });
+    }
+    const text = String(body.text || "").trim();
+    if (!text) return J({ error: "\u0645\u062A\u0646 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A" }, 400);
+    if (p.kind === "file" && text.length > 1e3) return J({ error: "\u0645\u062A\u0646 \u0647\u0645\u0631\u0627\u0647 \u0631\u0633\u0627\u0646\u0647 \u062D\u062F\u0627\u06A9\u062B\u0631 \u06F1\u06F0\u06F0\u06F0 \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A" }, 400);
+    if (text === String(p.text).trim()) return J({ error: "\u0645\u062A\u0646 \u062A\u063A\u06CC\u06CC\u0631\u06CC \u0646\u06A9\u0631\u062F\u0647" }, 400);
+    const r = await replacePost(env, p, { text, keepJob: false });
+    return J({ ok: true, id: r.id, message: `\u067E\u0633\u062A \u062C\u062F\u06CC\u062F #${r.id} \u0633\u0627\u062E\u062A\u0647 \u0634\u062F${r.note ? "\u061B \u0646\u0633\u062E\u0647\u200C\u06CC \u0642\u0628\u0644\u06CC \u0627\u06CC\u062A\u0627 \u0631\u0627 \u062F\u0633\u062A\u06CC \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F" : ""}` });
+  }
+  if (path === "lessons") return J({ lessons: (await db.prepare("SELECT id, rule, source, created_at FROM ea_lessons WHERE user_id=? ORDER BY id DESC LIMIT 100").bind(uid).all()).results });
+  if (path === "lesson" && post) {
+    const rule = String(body.rule || "").replace(/\s+/g, " ").trim().slice(0, 300);
+    if (body.op === "add") return J({ ok: rule.length >= 6 && await addLesson(env, uid, rule, "owner") });
+    if (body.op === "edit") {
+      if (rule.length < 6) return J({ error: "\u0642\u0627\u0646\u0648\u0646 \u062E\u06CC\u0644\u06CC \u06A9\u0648\u062A\u0627\u0647 \u0627\u0633\u062A" }, 400);
+      await db.prepare("UPDATE ea_lessons SET rule=? WHERE id=? AND user_id=?").bind(rule, int(body.id), uid).run();
+      return J({ ok: true });
+    }
+    if (body.op === "delete") {
+      await db.prepare("DELETE FROM ea_lessons WHERE id=? AND user_id=?").bind(int(body.id), uid).run();
+      return J({ ok: true });
+    }
+    return J({ error: "bad op" }, 400);
+  }
+  if (path === "council") {
+    const messages = (await db.prepare("SELECT role, text, created_at FROM ea_council WHERE user_id=? ORDER BY id DESC LIMIT 60").bind(uid).all()).results.reverse();
+    const asks = (await db.prepare("SELECT id, role, question, answer, status, created_at FROM ea_asks WHERE user_id=? ORDER BY id DESC LIMIT 8").bind(uid).all()).results;
+    return J({ messages, asks });
+  }
+  if (path === "council/say" && post) {
+    const t = String(body.text || "").trim().slice(0, 600);
+    if (t) await ownerSpoke(env, uid, t);
+    return J({ ok: true });
+  }
+  if (path === "council/run" && post) {
+    await enqueue(env, uid, "manual", {});
+    return J({ ok: true, message: "\u062C\u0644\u0633\u0647 \u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0634\u062F\u061B \u062A\u0627 \u06CC\u06A9 \u062F\u0642\u06CC\u0642\u0647\u200C\u06CC \u062F\u06CC\u06AF\u0631 \u0634\u0631\u0648\u0639 \u0645\u06CC\u200C\u0634\u0648\u062F" });
+  }
+  if (path === "ask" && post) {
+    if (body.skip) {
+      await db.prepare("UPDATE ea_asks SET status='skipped' WHERE id=? AND user_id=? AND status='open'").bind(int(body.id), uid).run();
+      return J({ ok: true });
+    }
+    const t = String(body.answer || "").trim();
+    return J({ ok: !!t && await answerAsk(env, uid, int(body.id), t) });
+  }
+  if (path === "jobs") return J({ jobs: (await db.prepare("SELECT id, name, instruction, times, enabled, last_info FROM agent_jobs WHERE user_id=? ORDER BY id DESC LIMIT 50").bind(uid).all()).results });
+  if (path === "job" && post) {
+    const id = int(body.id), own = await db.prepare("SELECT id, enabled FROM agent_jobs WHERE id=? AND user_id=?").bind(id, uid).first();
+    if (!own) return J({ error: "\u06CC\u0627\u0641\u062A \u0646\u0634\u062F" }, 404);
+    if (body.op === "toggle") await db.prepare("UPDATE agent_jobs SET enabled=? WHERE id=?").bind(own.enabled ? 0 : 1, id).run();
+    else if (body.op === "run") await db.prepare("UPDATE agent_jobs SET run_now=1, enabled=1 WHERE id=?").bind(id).run();
+    else if (body.op === "delete") {
+      await db.prepare("DELETE FROM agent_jobs WHERE id=?").bind(id).run();
+      await db.prepare("DELETE FROM agent_seen WHERE job_id=?").bind(id).run();
+    } else if (body.op === "edit") {
+      const ins = String(body.instruction || "").trim().slice(0, 2e3);
+      if (ins.length < 5) return J({ error: "\u062F\u0633\u062A\u0648\u0631 \u062E\u06CC\u0644\u06CC \u06A9\u0648\u062A\u0627\u0647 \u0627\u0633\u062A" }, 400);
+      await db.prepare("UPDATE agent_jobs SET instruction=? WHERE id=?").bind(ins, id).run();
+    }
+    return J({ ok: true });
+  }
+  if (path === "settings" && post) {
+    const g = await getGroup(env, uid);
+    if (typeof body.review === "boolean" && g) {
+      g.review = body.review;
+      await saveGroup(env, uid, g);
+    }
+    if (ROLE_OK(body.role)) {
+      if (body.clear) await clearRoleBot(env, uid, body.role);
+      else if (body.token) {
+        const t = String(body.token).trim();
+        if (!/^\d{6,}:[A-Za-z0-9_-]{20,}$/.test(t)) return J({ error: "\u0642\u0627\u0644\u0628 \u062A\u0648\u06A9\u0646 \u062F\u0631\u0633\u062A \u0646\u06CC\u0633\u062A" }, 400);
+        const r = await setRoleBot(env, uid, body.role, t);
+        if (!r.ok) return J({ error: "\u062A\u0644\u06AF\u0631\u0627\u0645 \u062A\u0648\u06A9\u0646 \u0631\u0627 \u0646\u067E\u0630\u06CC\u0631\u0641\u062A: " + r.error }, 400);
+        return J({ ok: true, message: `\u062B\u0628\u062A \u0634\u062F: @${r.name}${r.inGroup === false ? " \u2014 \u0647\u0646\u0648\u0632 \u062F\u0631 \u06AF\u0631\u0648\u0647 \u0646\u06CC\u0633\u062A" : ""}` });
+      }
+    }
+    return J({ ok: true });
+  }
+  return J({ error: "not found" }, 404);
+}
+
+// eitaa-src/manage.ts
+var MAX_CAPTION = 1e3;
+var back = (id) => [["\u21A9\uFE0F \u0628\u0631\u06AF\u0634\u062A", `pm:back:${id}`]];
+var getPost = (env, id) => env.DB.prepare("SELECT * FROM ea_posts WHERE id=?").bind(id).first();
+var ACTIVE = /* @__PURE__ */ new Set(["pending", "sending", "sent", "held", "failed", "draft"]);
+var STATUS = { pending: "\u23F3 \u062F\u0631 \u0635\u0641 \u0627\u0631\u0633\u0627\u0644", sending: "\u23F3 \u062F\u0631 \u062D\u0627\u0644 \u0627\u0631\u0633\u0627\u0644", sent: "\u2705 \u062F\u0631 \u0627\u06CC\u062A\u0627 \u0645\u0646\u062A\u0634\u0631 \u0634\u062F\u0647", held: "\u23F8 \u0646\u06AF\u0647\u200C\u062F\u0627\u0634\u062A\u0647 \u0634\u062F (\u062F\u0631 \u0627\u06CC\u062A\u0627 \u0646\u06CC\u0633\u062A)", failed: "\u274C \u0627\u0631\u0633\u0627\u0644 \u0646\u0627\u0645\u0648\u0641\u0642", draft: "\u{1F4DD} \u067E\u06CC\u0634\u200C\u0646\u0648\u06CC\u0633", deleted: "\u{1F5D1} \u062D\u0630\u0641 \u0634\u062F\u0647", replaced: "\u267B\uFE0F \u062C\u0627\u06CC\u06AF\u0632\u06CC\u0646 \u0634\u062F\u0647", canceled: "\u{1F6AB} \u0644\u063A\u0648 \u0634\u062F\u0647" };
+async function open(c, u, postId) {
+  const { env } = c;
+  await clearSession(env, u.id);
+  const p = await getPost(env, postId);
+  if (!p || p.user_id !== u.id) return void await send(env, u.id, "\u0627\u06CC\u0646 \u067E\u0633\u062A \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F \u06CC\u0627 \u0645\u0627\u0644 \u0634\u0645\u0627 \u0646\u06CC\u0633\u062A.");
+  try {
+    let file = null;
+    if (p.kind === "file") {
+      try {
+        file = await loadMedia(env, p);
+      } catch {
+      }
+    }
+    await sendCopy(env, { chat: u.id }, p, file);
+  } catch (e) {
+    await send(env, u.id, `<i>(\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u067E\u0633\u062A \u0645\u0645\u06A9\u0646 \u0646\u0634\u062F: ${esc(e.message)})</i>
+${esc(p.text.slice(0, 1500))}`);
+  }
+  const pub = await getPub(env, p.id);
+  const next = pub?.note?.startsWith("replaced_by:") ? Number(pub.note.split(":")[1]) : 0;
+  const st = `${STATUS[p.status] || p.status}${p.status === "held" || p.status === "failed" ? `
+<i>${esc(p.error)}</i>` : ""}`;
+  if (!ACTIVE.has(p.status)) {
+    return void await send(env, u.id, `<b>\u067E\u0633\u062A #${p.id}</b>
+${st}${next ? "\n\u0646\u0633\u062E\u0647\u200C\u06CC \u062C\u062F\u06CC\u062F: #" + next : ""}`, next ? ikb([[["\u{1F4C4} \u0628\u0627\u0632 \u06A9\u0631\u062F\u0646 \u0646\u0633\u062E\u0647\u200C\u06CC \u062C\u062F\u06CC\u062F", `pm:open:${next}`]]]) : void 0);
+  }
+  await send(env, u.id, `<b>\u067E\u0633\u062A #${p.id}</b> \xB7 ${st}
+
+\u0686\u0647 \u06A9\u0627\u0631\u06CC \u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u06CC\u062F \u0627\u0646\u062C\u0627\u0645 \u062F\u0647\u06CC\u062F\u061F`, ikb([
+    [["\u{1F6A9} \u06AF\u0632\u0627\u0631\u0634 \u062E\u0637\u0627", `pm:err:${p.id}`], ["\u270F\uFE0F \u062A\u0635\u062D\u06CC\u062D", `pm:fix:${p.id}`]],
+    [["\u{1F5D1} \u062D\u0630\u0641 \u067E\u06CC\u0627\u0645", `pm:del:${p.id}`], ["\u{1F5BC} \u0627\u0641\u0632\u0648\u062F\u0646 \u0639\u06A9\u0633/\u0648\u06CC\u062F\u06CC\u0648 \u0648 \u0627\u0631\u0633\u0627\u0644 \u0645\u062C\u062F\u062F", `pm:media:${p.id}`]]
+  ]));
+}
+async function removePost(env, p, status) {
+  await removeFromGroup(env, p.id);
+  let eitaaRes = "none", error = "";
+  if (p.status === "sent") {
+    const user = await getUser(env, p.user_id), ch = await env.DB.prepare("SELECT chat_id FROM ea_channels WHERE id=?").bind(p.channel_id).first();
+    const token = user ? await dec(env.SECRET_KEY, user.eitaa_token_enc) : "";
+    if (token && ch) {
+      const r = await deleteMessage(env, token, ch.chat_id, p.eitaa_message_id || "");
+      eitaaRes = r.ok ? "removed" : "manual";
+      error = r.error;
+    } else eitaaRes = "manual";
+  }
+  await env.DB.prepare("UPDATE ea_posts SET status=? WHERE id=?").bind(status, p.id).run();
+  return { eitaa: eitaaRes, error };
+}
+var eitaaNote = async (env, p, r) => {
+  if (r.eitaa !== "manual") return "";
+  const ch = await env.DB.prepare("SELECT chat_id, title FROM ea_channels WHERE id=?").bind(p.channel_id).first();
+  return `
+
+\u26A0\uFE0F \u0627\u06CC\u062A\u0627\u06CC\u0627\u0631 \u062F\u0631 API \u062E\u0648\u062F \xAB\u062D\u0630\u0641 \u067E\u06CC\u0627\u0645\xBB \u0646\u062F\u0627\u0631\u062F\u060C \u067E\u0633 \u0646\u0633\u062E\u0647\u200C\u06CC \u0642\u0628\u0644\u06CC \u0647\u0646\u0648\u0632 \u062F\u0631 \u0627\u06CC\u062A\u0627 \u0645\u0627\u0646\u062F\u0647${p.eitaa_message_id ? ` (\u067E\u06CC\u0627\u0645 ${esc(p.eitaa_message_id)})` : ""}${ch ? ` \u2014 \u0644\u0637\u0641\u0627\u064B \u0622\u0646 \u0631\u0627 \u062F\u0631 \u06A9\u0627\u0646\u0627\u0644 \xAB${esc(ch.title)}\xBB \u062F\u0633\u062A\u06CC \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F` : ""}.${r.error ? `
+<i>${esc(r.error.slice(0, 120))}</i>` : ""}`;
+};
+async function replacePost(env, old, patch) {
+  const n = { ...old, ...patch };
+  const r = await env.DB.prepare("INSERT INTO ea_posts(user_id,channel_id,kind,text,file_id,file_name,title,silent,pin,view_delete,run_at,status,created_at,src_url,job_id,error) VALUES(?,?,?,?,?,?,?,?,?,?,?,'pending',?,?,?,'')").bind(old.user_id, old.channel_id, n.kind, n.text, n.file_id, n.file_name, old.title, old.silent, old.pin, old.view_delete, now(), now(), n.src_url, patch.keepJob ? old.job_id : null).run();
+  const id = r.meta.last_row_id;
+  const rm = await removePost(env, old, "replaced");
+  await setVerdict(env, old.id, old.user_id, "replaced", `replaced_by:${id}`);
+  return { id, note: await eitaaNote(env, old, rm) };
+}
+async function onCallback2(c, u, q, act2, arg) {
+  const { env } = c, id = Number(arg);
+  await answer(env, q.id);
+  if (act2 === "open" || act2 === "back") return open(c, u, id);
+  const p = await getPost(env, id);
+  if (!p || p.user_id !== u.id) return void await send(env, u.id, "\u0627\u06CC\u0646 \u067E\u0633\u062A \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F.");
+  if (!ACTIVE.has(p.status)) return open(c, u, id);
+  switch (act2) {
+    case "err":
+      await setSession(env, u.id, "pm_err", { id });
+      return void await send(env, u.id, "\u{1F6A9} \u0644\u0637\u0641\u0627\u064B \u062E\u0637\u0627 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F (\u0645\u062B\u0644\u0627\u064B: \xAB\u0622\u062E\u0631 \u0645\u062A\u0646 \u0622\u06CC\u062F\u06CC \u06A9\u0627\u0646\u0627\u0644 \u062F\u06CC\u06AF\u0631\u06CC \u0645\u0627\u0646\u062F\u0647\xBB \u06CC\u0627 \xAB\u062A\u0627\u0631\u06CC\u062E \u0627\u0634\u062A\u0628\u0627\u0647 \u0627\u0633\u062A\xBB).\n\u0627\u0632 \u0631\u0648\u06CC \u0622\u0646 \u06CC\u06A9 \u0642\u0627\u0646\u0648\u0646 \u06CC\u0627\u062F \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0645 \u062A\u0627 \u062A\u06A9\u0631\u0627\u0631 \u0646\u0634\u0648\u062F \u0648 \u0627\u06AF\u0631 \u0628\u0634\u0648\u062F \u062F\u0631\u0633\u062A\u0634 \u0645\u06CC\u200C\u06A9\u0646\u0645.", ikb([back(id)]));
+    case "fix":
+      await setSession(env, u.id, "pm_fix", { id });
+      return void await send(env, u.id, "\u270F\uFE0F \u0645\u062A\u0646 \u0648/\u06CC\u0627 \u0639\u06A9\u0633 \u0648 \u0648\u06CC\u062F\u06CC\u0648\u06CC \u062C\u062F\u06CC\u062F \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u062A\u0627 \u062C\u0627\u06CC\u06AF\u0632\u06CC\u0646 \u0634\u0648\u062F.\n\u2022 \u0641\u0642\u0637 \u0645\u062A\u0646 \u2190 \u0631\u0633\u0627\u0646\u0647\u200C\u06CC \u0642\u0628\u0644\u06CC \u0645\u06CC\u200C\u0645\u0627\u0646\u062F\n\u2022 \u0641\u0642\u0637 \u0639\u06A9\u0633/\u0648\u06CC\u062F\u06CC\u0648 \u2190 \u0645\u062A\u0646 \u0642\u0628\u0644\u06CC \u0645\u06CC\u200C\u0645\u0627\u0646\u062F\n\u2022 \u0647\u0631 \u062F\u0648 (\u0639\u06A9\u0633/\u0648\u06CC\u062F\u06CC\u0648 \u0628\u0627 \u06A9\u067E\u0634\u0646) \u2190 \u0647\u0631 \u062F\u0648 \u0639\u0648\u0636 \u0645\u06CC\u200C\u0634\u0648\u062F", ikb([back(id)]));
+    case "media":
+      await setSession(env, u.id, "pm_media", { id });
+      return void await send(env, u.id, "\u{1F5BC} \u0639\u06A9\u0633 \u06CC\u0627 \u0648\u06CC\u062F\u06CC\u0648 \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F. \u067E\u06CC\u0627\u0645 \u0642\u0628\u0644\u06CC \u067E\u0627\u06A9 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u067E\u0633\u062A \u062C\u062F\u06CC\u062F (\u0628\u0627 \u0647\u0645\u0627\u0646 \u0645\u062A\u0646 \u0648 \u0627\u06CC\u0646 \u0631\u0633\u0627\u0646\u0647) \u0628\u0627\u0631\u06AF\u0630\u0627\u0631\u06CC \u0645\u06CC\u200C\u0634\u0648\u062F.", ikb([back(id)]));
+    case "del":
+      return void await send(env, u.id, `\u{1F5D1} \u067E\u0633\u062A #${id} \u062D\u0630\u0641 \u0634\u0648\u062F\u061F${p.status === "sent" ? "\n(\u0627\u0632 \u06AF\u0631\u0648\u0647 \u067E\u0627\u06A9 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u062D\u0630\u0641 \u0627\u0632 \u0627\u06CC\u062A\u0627 \u0628\u0633\u062A\u06AF\u06CC \u0628\u0647 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0627\u06CC\u062A\u0627\u06CC\u0627\u0631 \u062F\u0627\u0631\u062F)" : ""}`, ikb([[["\u2705 \u0628\u0644\u0647\u060C \u062D\u0630\u0641 \u06A9\u0646", `pm:dy:${id}`], ["\u21A9\uFE0F \u0628\u0631\u06AF\u0634\u062A", `pm:back:${id}`]]]));
+    case "dy": {
+      const r = await removePost(env, p, "deleted");
+      await setVerdict(env, id, u.id, "deleted");
+      return void await send(env, u.id, `\u{1F5D1} \u067E\u0633\u062A #${id} \u062D\u0630\u0641 \u0634\u062F.${r.eitaa === "removed" ? " (\u0627\u0632 \u0627\u06CC\u062A\u0627 \u0647\u0645 \u067E\u0627\u06A9 \u0634\u062F)" : ""}${await eitaaNote(env, p, r)}`);
+    }
+    case "force": {
+      const media = (await getPub(env, id))?.verdict === "held_media";
+      if (p.status !== "held") return void await send(env, u.id, "\u0627\u06CC\u0646 \u067E\u0633\u062A \u062F\u0631 \u062D\u0627\u0644 \u062D\u0627\u0636\u0631 \u0646\u06AF\u0647\u200C\u062F\u0627\u0634\u062A\u0647 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A.");
+      if (media && p.kind === "file") {
+        if (!p.text.trim()) return void await send(env, u.id, "\u0627\u06CC\u0646 \u067E\u0633\u062A \u0645\u062A\u0646\u06CC \u0646\u062F\u0627\u0631\u062F\u061B \u0627\u0632 \xAB\u{1F5BC} \u0627\u0641\u0632\u0648\u062F\u0646 \u0639\u06A9\u0633/\u0648\u06CC\u062F\u06CC\u0648\xBB \u06CC\u0627 \xAB\u270F\uFE0F \u062A\u0635\u062D\u06CC\u062D\xBB \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F.");
+        await env.DB.prepare("UPDATE ea_posts SET kind='text', file_id='', src_url='', file_name='' WHERE id=?").bind(id).run();
+      }
+      await setVerdict(env, id, u.id, "forced");
+      await env.DB.prepare("UPDATE ea_posts SET status='pending', run_at=?, error='' WHERE id=?").bind(now(), id).run();
+      return void await send(env, u.id, `\u{1F680} \u067E\u0633\u062A #${id} ${media ? "\u0641\u0642\u0637 \u0628\u0627 \u0645\u062A\u0646 " : ""}\u062F\u0631 \u0635\u0641 \u0627\u0631\u0633\u0627\u0644 \u0642\u0631\u0627\u0631 \u06AF\u0631\u0641\u062A (\u062A\u0627 \u06CC\u06A9 \u062F\u0642\u06CC\u0642\u0647\u200C\u06CC \u062F\u06CC\u06AF\u0631).`);
+    }
+  }
+}
+async function onMessage(c, u, state, d, m) {
+  const { env } = c, id = Number(d.id);
+  const p = await getPost(env, id);
+  if (!p || p.user_id !== u.id || !ACTIVE.has(p.status)) {
+    await clearSession(env, u.id);
+    return void await send(env, u.id, "\u0627\u06CC\u0646 \u067E\u0633\u062A \u062F\u06CC\u06AF\u0631 \u0642\u0627\u0628\u0644 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u06CC\u0633\u062A.");
+  }
+  const text = (m.text || "").trim();
+  if (state === "pm_err") {
+    if (!text) return void await send(env, u.id, "\u062E\u0637\u0627 \u0631\u0627 \u0628\u0627 \u0645\u062A\u0646 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.", ikb([back(id)]));
+    await clearSession(env, u.id);
+    const wait = await send(env, u.id, "\u{1F50E} \u062F\u0631 \u062D\u0627\u0644 \u0628\u0631\u0631\u0633\u06CC \u062E\u0637\u0627\u2026");
+    const own = (await env.DB.prepare("SELECT footer FROM agent_jobs WHERE id=?").bind(p.job_id || 0).first())?.footer || "";
+    let lesson = "", fixed = null, why = "";
+    try {
+      const r2 = await learnFromError(env, u.id, p.text, text, p.kind === "file", own);
+      lesson = r2.rule;
+      fixed = r2.fixed;
+      why = r2.why;
+    } catch {
+      lesson = `\u0627\u0632 \u0627\u06CC\u0646 \u062E\u0637\u0627 \u062C\u0644\u0648\u06AF\u06CC\u0631\u06CC \u06A9\u0646: ${text.slice(0, 200)}`;
+      why = "\u0645\u062F\u0644 \u0647\u0648\u0634 \u0645\u0635\u0646\u0648\u0639\u06CC \u0627\u0644\u0627\u0646 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u0628\u0648\u062F\u061B \u062E\u0637\u0627 \u0641\u0642\u0637 \u062B\u0628\u062A \u0634\u062F.";
+    }
+    const learned = lesson ? await addLesson(env, u.id, lesson, text) : false;
+    if (learned) await lessonNote(env, u.id, `\u{1F4CC} <b>\u062F\u0631\u0633 \u062A\u0627\u0632\u0647</b> (\u0627\u0632 \u06AF\u0632\u0627\u0631\u0634 \u067E\u0633\u062A #${id})
+${esc(lesson)}`);
+    await enqueue(env, u.id, "reported_error", { id, error: text.slice(0, 300), lesson, fixed: !!fixed }).catch(() => null);
+    await report(env, u.id, `\u{1F6A9} <b>\u06AF\u0632\u0627\u0631\u0634 \u062E\u0637\u0627</b> \xB7 \u067E\u0633\u062A #${id}
+${esc(text.slice(0, 300))}${lesson ? `
+
+\u{1F9E0} \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u0645: ${esc(lesson)}` : ""}`);
+    if (fixed && (p.kind === "text" || fixed.length <= MAX_CAPTION)) {
+      const r2 = await replacePost(env, p, { text: fixed, keepJob: true });
+      const msg2 = `\u2705 \u062E\u0637\u0627 \u0627\u0635\u0644\u0627\u062D \u0634\u062F \u0648 \u067E\u0633\u062A \u062C\u062F\u06CC\u062F #${r2.id} \u0633\u0627\u062E\u062A\u0647 \u0634\u062F.
+\u0627\u0648\u0644 \u062F\u0631 \u06AF\u0631\u0648\u0647\u060C \u0628\u0639\u062F \u0627\u0632 \u0628\u0631\u0631\u0633\u06CC \u0646\u0627\u0638\u0631 \u062F\u0631 \u0627\u06CC\u062A\u0627 \u0645\u0646\u062A\u0634\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F (\u062A\u0627 \u06CC\u06A9 \u062F\u0642\u06CC\u0642\u0647).${lesson ? `
+
+\u{1F9E0} \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u0645: ${esc(lesson)}` : ""}${r2.note}`;
+      if (wait) await edit(env, u.id, wait, msg2);
+      else await send(env, u.id, msg2);
+      return;
+    }
+    const msg = `\u{1F615} \u0646\u062A\u0648\u0627\u0646\u0633\u062A\u0645 \u062E\u0648\u062F\u06A9\u0627\u0631 \u062F\u0631\u0633\u062A\u0634 \u06A9\u0646\u0645${why ? `: ${esc(why)}` : "."}
+\u067E\u0633\u062A \u062C\u062F\u06CC\u062F\u06CC \u0627\u0631\u0633\u0627\u0644 \u0646\u0634\u062F \u0648 \u067E\u0633\u062A \u0642\u0628\u0644\u06CC \u062F\u0633\u062A\u200C\u0646\u062E\u0648\u0631\u062F\u0647 \u0645\u0627\u0646\u062F.${lesson ? `
+
+\u{1F9E0} \u0648\u0644\u06CC \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u0645: ${esc(lesson)}` : ""}
+
+\u062E\u0648\u062F\u062A\u0627\u0646 \u062A\u0635\u0645\u06CC\u0645 \u0628\u06AF\u06CC\u0631\u06CC\u062F \u{1F447}`;
+    const kb = ikb([[["\u270F\uFE0F \u062A\u0635\u062D\u06CC\u062D", `pm:fix:${id}`], ["\u{1F5BC} \u0627\u0641\u0632\u0648\u062F\u0646 \u0639\u06A9\u0633/\u0648\u06CC\u062F\u06CC\u0648", `pm:media:${id}`]], [["\u{1F5D1} \u062D\u0630\u0641 \u067E\u06CC\u0627\u0645", `pm:del:${id}`]]]);
+    if (wait) await edit(env, u.id, wait, msg, kb);
+    else await send(env, u.id, msg, kb);
+    return;
+  }
+  const r = extract(m);
+  if ("error" in r) return void await send(env, u.id, "\u274C " + r.error, ikb([back(id)]));
+  let patch;
+  if (state === "pm_fix") {
+    if (r.kind === "text") patch = { text: r.text };
+    else patch = { kind: "file", file_id: r.file_id, file_name: r.file_name, src_url: "", text: r.text || p.text };
+  } else {
+    if (r.kind === "text") return void await send(env, u.id, "\u06CC\u06A9 \u0639\u06A9\u0633 \u06CC\u0627 \u0648\u06CC\u062F\u06CC\u0648 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F (\u0646\u0647 \u0645\u062A\u0646).", ikb([back(id)]));
+    patch = { kind: "file", file_id: r.file_id, file_name: r.file_name, src_url: "", text: p.text };
+  }
+  const finalKind = patch.kind || p.kind, finalText = patch.text ?? p.text;
+  if (finalKind === "file" && finalText.length > MAX_CAPTION) return void await send(env, u.id, `\u274C \u0645\u062A\u0646 \u0647\u0645\u0631\u0627\u0647 \u0639\u06A9\u0633/\u0648\u06CC\u062F\u06CC\u0648 \u062D\u062F\u0627\u06A9\u062B\u0631 ${MAX_CAPTION} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A (\u0627\u0644\u0627\u0646 ${finalText.length}). \u0645\u062A\u0646 \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631\u06CC \u0628\u0641\u0631\u0633\u062A\u06CC\u062F.`, ikb([back(id)]));
+  if (!finalText.trim() && finalKind === "text") return void await send(env, u.id, "\u0645\u062A\u0646 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A.", ikb([back(id)]));
+  await clearSession(env, u.id);
+  const res = await replacePost(env, p, patch);
+  await send(env, u.id, `\u267B\uFE0F \u067E\u06CC\u0627\u0645 \u0642\u0628\u0644\u06CC \u06A9\u0646\u0627\u0631 \u0631\u0641\u062A \u0648 \u067E\u0633\u062A \u062C\u062F\u06CC\u062F #${res.id} \u0633\u0627\u062E\u062A\u0647 \u0634\u062F.
+\u0627\u0648\u0644 \u062F\u0631 \u06AF\u0631\u0648\u0647\u060C \u0628\u0639\u062F \u0627\u0632 \u0628\u0631\u0631\u0633\u06CC \u0646\u0627\u0638\u0631 \u062F\u0631 \u0627\u06CC\u062A\u0627 \u0645\u0646\u062A\u0634\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F (\u062A\u0627 \u06CC\u06A9 \u062F\u0642\u06CC\u0642\u0647).${res.note}`);
+}
+var GUIDE2 = "<b>\u{1F4D6} \u0627\u062A\u0635\u0627\u0644 \u06AF\u0631\u0648\u0647</b>\n\n1\uFE0F\u20E3 \u06CC\u06A9 \u06AF\u0631\u0648\u0647 \u062A\u0644\u06AF\u0631\u0627\u0645 \u0628\u0633\u0627\u0632\u06CC\u062F \u0648 \u062F\u0631 \u062A\u0646\u0638\u06CC\u0645\u0627\u062A \u0622\u0646 \xABTopics\xBB (\u062A\u0627\u067E\u06CC\u06A9) \u0631\u0627 \u0631\u0648\u0634\u0646 \u06A9\u0646\u06CC\u062F.\n2\uFE0F\u20E3 \u0647\u0645\u06CC\u0646 \u0631\u0628\u0627\u062A \u0631\u0627 \u0639\u0636\u0648 \u06AF\u0631\u0648\u0647 \u0648 <b>\u0627\u062F\u0645\u06CC\u0646</b> \u06A9\u0646\u06CC\u062F (\xAB\u0645\u062F\u06CC\u0631\u06CC\u062A \u062A\u0627\u067E\u06CC\u06A9\u200C\u0647\u0627\xBB \u0648 \xAB\u062D\u0630\u0641 \u067E\u06CC\u0627\u0645\u200C\u0647\u0627\xBB \u0644\u0627\u0632\u0645 \u0627\u0633\u062A).\n3\uFE0F\u20E3 \u062F\u0627\u062E\u0644 \u06AF\u0631\u0648\u0647 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F: <code>/eagroup</code>\n\n\u062A\u0627\u067E\u06CC\u06A9\u200C\u0647\u0627\u06CC \xAB\u0645\u0637\u0627\u0644\u0628\xBB\u060C \xAB\u06AF\u0632\u0627\u0631\u0634\u0627\u062A\xBB\u060C \xAB\u0686\u062A \u0628\u0627 \u0627\u06CC\u062C\u0646\u062A\xBB\u060C \xAB\u0622\u0645\u0648\u062E\u062A\u0647\u200C\u0647\u0627\xBB \u0648 \xAB\u0634\u0648\u0631\u0627\xBB \u0633\u0627\u062E\u062A\u0647 \u0645\u06CC\u200C\u0634\u0648\u062F.\n\n\u{1F6E1} <b>\u0631\u0628\u0627\u062A \u0646\u0627\u0638\u0631</b> \u0648 \u{1F9ED} <b>\u0631\u0628\u0627\u062A \u062F\u0633\u062A\u06CC\u0627\u0631</b> (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC): \u062F\u0631 BotFather \u062F\u0648 \u0631\u0628\u0627\u062A \u062C\u062F\u06CC\u062F \u0628\u0633\u0627\u0632\u06CC\u062F\u060C \u062A\u0648\u06A9\u0646 \u0647\u0631\u06A9\u062F\u0627\u0645 \u0631\u0627 \u0627\u0632 \u062F\u06A9\u0645\u0647\u200C\u06CC \xAB\u062B\u0628\u062A \u2026\xBB \u0628\u062F\u0647\u06CC\u062F \u0648 \u0647\u0631 \u062F\u0648 \u0631\u0627 \u062F\u0631 \u06AF\u0631\u0648\u0647 \u0627\u062F\u0645\u06CC\u0646 \u06A9\u0646\u06CC\u062F. \u062F\u0631 \u062A\u0627\u067E\u06CC\u06A9 \xAB\u0634\u0648\u0631\u0627\xBB \u0628\u0627 \u0646\u0627\u0645 \u062E\u0648\u062F\u0634\u0627\u0646 \u0628\u0627 \u0647\u0645 \u06AF\u0641\u062A\u06AF\u0648 \u0645\u06CC\u200C\u06A9\u0646\u0646\u062F. (\u0628\u062F\u0648\u0646 \u0622\u0646\u200C\u0647\u0627\u060C \u0647\u0645\u06CC\u0646 \u0631\u0628\u0627\u062A \u0628\u0627 \u0628\u0631\u0686\u0633\u0628 \u0646\u0642\u0634\u0634\u0627\u0646 \u0645\u06CC\u200C\u0646\u0648\u06CC\u0633\u062F.)\n\n\u{1F310} <b>\u0633\u0627\u06CC\u062A \u0634\u062E\u0635\u06CC</b>: \u062F\u06A9\u0645\u0647\u200C\u06CC \xAB\u{1F310} \u0633\u0627\u06CC\u062A \u0645\u0646\xBB \u06CC\u06A9 \u0644\u06CC\u0646\u06A9 \u0645\u062E\u0635\u0648\u0635 \u0634\u0645\u0627 \u0645\u06CC\u200C\u062F\u0647\u062F\u061B \u0647\u0645\u0647\u200C\u06CC \u06A9\u0627\u0631\u0647\u0627 \u0627\u0632 \u0622\u0646\u062C\u0627 \u0647\u0645 \u0634\u062F\u0646\u06CC \u0627\u0633\u062A.";
+var ROLES = { sup: { fa: "\u0646\u0627\u0638\u0631", icon: "\u{1F6E1}" }, asst: { fa: "\u062F\u0633\u062A\u06CC\u0627\u0631", icon: "\u{1F9ED}" } };
+async function home2(env, u) {
+  const g = await getGroup(env, u.id);
+  const bot = async (r) => ({ has: !!await roleToken(env, u.id, r), name: await kvGet(env, `${r}name:${u.id}`) });
+  const sup = await bot("sup"), asst = await bot("asst");
+  const n = (await env.DB.prepare("SELECT COUNT(*) n FROM ea_lessons WHERE user_id=?").bind(u.id).first())?.n || 0;
+  const asks = (await env.DB.prepare("SELECT COUNT(*) n FROM ea_asks WHERE user_id=? AND status='open'").bind(u.id).first())?.n || 0;
+  const line = (r, b) => `${ROLES[r].icon} ${ROLES[r].fa}: ${b.has ? "\u2705" + (b.name ? " @" + esc(b.name) : "") : "\u0631\u0628\u0627\u062A \u062C\u062F\u0627 \u0646\u062F\u0627\u0631\u062F (\u0647\u0645\u06CC\u0646 \u0631\u0628\u0627\u062A \u0645\u06CC\u200C\u0646\u0648\u06CC\u0633\u062F)"}`;
+  const t = `<b>\u{1F465} \u06AF\u0631\u0648\u0647\u060C \u0646\u0627\u0638\u0631 \u0648 \u062F\u0633\u062A\u06CC\u0627\u0631</b>
+
+\u{1F465} \u06AF\u0631\u0648\u0647: ${g ? `\u2705 ${esc(g.title || g.chat)}${g.forum ? " \xB7 \u062A\u0627\u067E\u06CC\u06A9\u200C\u0647\u0627 " + (g.topics.council ? "\u2705" : "\u26A0\uFE0F \u0628\u0631\u0627\u06CC \u062A\u0627\u067E\u06CC\u06A9 \xAB\u0634\u0648\u0631\u0627\xBB \u062F\u0648\u0628\u0627\u0631\u0647 /eagroup \u0628\u0641\u0631\u0633\u062A\u06CC\u062F") : " \xB7 \u0628\u062F\u0648\u0646 \u062A\u0627\u067E\u06CC\u06A9"}` : "\u274C \u0645\u062A\u0635\u0644 \u0646\u06CC\u0633\u062A"}
+\u{1F6E1} \u0628\u0631\u0631\u0633\u06CC \u0646\u0627\u0638\u0631 \u067E\u06CC\u0634 \u0627\u0632 \u0627\u06CC\u062A\u0627: ${g ? g.review ? "\u0631\u0648\u0634\u0646" : "\u062E\u0627\u0645\u0648\u0634" : "\u2014"}
+${line("sup", sup)}
+${line("asst", asst)}
+\u{1F9E0} \u0622\u0645\u0648\u062E\u062A\u0647\u200C\u0647\u0627: ${n}${asks ? `
+\u2753 \u0633\u0624\u0627\u0644 \u0628\u06CC\u200C\u067E\u0627\u0633\u062E: ${asks}` : ""}`;
+  const rows = [[["\u{1F310} \u0633\u0627\u06CC\u062A \u0645\u0646", "gp:site"], ["\u{1F4D6} \u0631\u0627\u0647\u0646\u0645\u0627", "gp:help"]], [["\u{1F9E0} \u0622\u0645\u0648\u062E\u062A\u0647\u200C\u0647\u0627", "gp:les"], ["\u{1F91D} \u062C\u0644\u0633\u0647\u200C\u06CC \u0634\u0648\u0631\u0627", "gp:run"]]];
+  if (g) rows.push([[g.review ? "\u{1F6E1} \u062E\u0627\u0645\u0648\u0634\u200C\u06A9\u0631\u062F\u0646 \u0628\u0631\u0631\u0633\u06CC" : "\u{1F6E1} \u0631\u0648\u0634\u0646\u200C\u06A9\u0631\u062F\u0646 \u0628\u0631\u0631\u0633\u06CC", "gp:rev"], ["\u{1F50C} \u0642\u0637\u0639 \u06AF\u0631\u0648\u0647", "gp:off"]]);
+  rows.push([[sup.has ? "\u{1F511} \u062A\u063A\u06CC\u06CC\u0631 \u0646\u0627\u0638\u0631" : "\u{1F511} \u062B\u0628\u062A \u0631\u0628\u0627\u062A \u0646\u0627\u0638\u0631", "gp:sup"], [asst.has ? "\u{1F511} \u062A\u063A\u06CC\u06CC\u0631 \u062F\u0633\u062A\u06CC\u0627\u0631" : "\u{1F511} \u062B\u0628\u062A \u0631\u0628\u0627\u062A \u062F\u0633\u062A\u06CC\u0627\u0631", "gp:asst"]]);
+  const del2 = [];
+  if (sup.has) del2.push(["\u{1F5D1} \u062D\u0630\u0641 \u0646\u0627\u0638\u0631", "gp:supdel"]);
+  if (asst.has) del2.push(["\u{1F5D1} \u062D\u0630\u0641 \u062F\u0633\u062A\u06CC\u0627\u0631", "gp:asstdel"]);
+  if (del2.length) rows.push(del2);
+  await send(env, u.id, t, ikb(rows));
+}
+var lessonKb = (id) => ikb([[["\u270F\uFE0F \u0648\u06CC\u0631\u0627\u06CC\u0634", `gp:le:${id}`], ["\u{1F5D1} \u0641\u0631\u0627\u0645\u0648\u0634 \u06A9\u0646", `gp:ld:${id}`]]]);
+async function onGroupCallback(c, u, q, act2, arg) {
+  const { env } = c;
+  await answer(env, q.id);
+  const g = await getGroup(env, u.id);
+  switch (act2) {
+    case "help":
+      return void await send(env, u.id, GUIDE2);
+    case "site":
+      return void await send(env, u.id, await siteLink(env, u.id));
+    case "run":
+      await enqueue(env, u.id, "manual", {});
+      return void await send(env, u.id, "\u{1F91D} \u062C\u0644\u0633\u0647\u200C\u06CC \u0634\u0648\u0631\u0627 \u062F\u0631\u062E\u0648\u0627\u0633\u062A \u0634\u062F\u061B \u062A\u0627 \u06CC\u06A9 \u062F\u0642\u06CC\u0642\u0647\u200C\u06CC \u062F\u06CC\u06AF\u0631 \u062F\u0631 \u062A\u0627\u067E\u06CC\u06A9 \xAB\u0634\u0648\u0631\u0627\xBB \u0634\u0631\u0648\u0639 \u0645\u06CC\u200C\u0634\u0648\u062F.");
+    case "rev":
+      if (g) {
+        g.review = !g.review;
+        await saveGroup(env, u.id, g);
+      }
+      return home2(env, u);
+    case "off":
+      await dropGroup(env, u.id);
+      return void await send(env, u.id, "\u{1F50C} \u06AF\u0631\u0648\u0647 \u0642\u0637\u0639 \u0634\u062F\u061B \u067E\u0633\u062A\u200C\u0647\u0627 \u0645\u0633\u062A\u0642\u06CC\u0645 \u0628\u0647 \u0627\u06CC\u062A\u0627 \u0645\u06CC\u200C\u0631\u0648\u0646\u062F.");
+    case "sup":
+    case "asst":
+      await setSession(env, u.id, "gp_bot", { role: act2 });
+      return void await send(env, u.id, `\u{1F511} \u062A\u0648\u06A9\u0646 \u0631\u0628\u0627\u062A ${ROLES[act2].fa} \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F (\u0627\u0632 BotFather).
+\u{1F9F9} \u067E\u06CC\u0627\u0645 \u0634\u0645\u0627 \u0628\u0639\u062F \u0627\u0632 \u062E\u0648\u0627\u0646\u062F\u0646 \u067E\u0627\u06A9 \u0645\u06CC\u200C\u0634\u0648\u062F. \u0644\u063A\u0648: /cancel`);
+    case "supdel":
+    case "asstdel":
+      await clearRoleBot(env, u.id, act2 === "supdel" ? "sup" : "asst");
+      return home2(env, u);
+    case "les": {
+      const rows = (await env.DB.prepare("SELECT id, rule FROM ea_lessons WHERE user_id=? ORDER BY id DESC LIMIT 20").bind(u.id).all()).results;
+      await send(env, u.id, `\u{1F9E0} <b>\u0622\u0645\u0648\u062E\u062A\u0647\u200C\u0647\u0627</b> (${rows.length})
+\u0647\u0631 \u0642\u0627\u0646\u0648\u0646 \u0631\u0627 \u0645\u06CC\u200C\u062A\u0648\u0627\u0646\u06CC\u062F \u0648\u06CC\u0631\u0627\u06CC\u0634 \u06CC\u0627 \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F.`, ikb([[["\u2795 \u0627\u0641\u0632\u0648\u062F\u0646 \u0642\u0627\u0646\u0648\u0646", "gp:ln"]]]));
+      for (const r of rows) await send(env, u.id, `\u{1F9E0} ${esc(r.rule)}`, lessonKb(r.id));
+      return;
+    }
+    case "ln":
+      await setSession(env, u.id, "gp_led", { id: 0 });
+      return void await send(env, u.id, "\u2795 \u0645\u062A\u0646 \u0642\u0627\u0646\u0648\u0646 \u062C\u062F\u06CC\u062F \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F (\u06A9\u0648\u062A\u0627\u0647 \u0648 \u06A9\u0644\u06CC\u060C \u0645\u062B\u0644\u0627\u064B \xAB\u0622\u062E\u0631 \u0645\u062A\u0646\u060C \u0622\u06CC\u062F\u06CC \u06A9\u0627\u0646\u0627\u0644 \u062F\u06CC\u06AF\u0631 \u0646\u06AF\u0630\u0627\u0631\xBB).\n\u0644\u063A\u0648: /cancel");
+    case "le": {
+      const r = await env.DB.prepare("SELECT rule FROM ea_lessons WHERE id=? AND user_id=?").bind(Number(arg), u.id).first();
+      if (!r) return void await send(env, u.id, "\u0627\u06CC\u0646 \u0642\u0627\u0646\u0648\u0646 \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F.");
+      await setSession(env, u.id, "gp_led", { id: Number(arg) });
+      return void await send(env, u.id, `\u270F\uFE0F \u0645\u062A\u0646 \u0641\u0639\u0644\u06CC:
+<i>${esc(r.rule)}</i>
+
+\u0645\u062A\u0646 \u062C\u062F\u06CC\u062F \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.
+\u0644\u063A\u0648: /cancel`);
+    }
+    case "ld":
+      await env.DB.prepare("DELETE FROM ea_lessons WHERE id=? AND user_id=?").bind(Number(arg), u.id).run();
+      if (q.message) await edit(env, u.id, q.message.message_id, "\u{1F5D1} \u0641\u0631\u0627\u0645\u0648\u0634 \u0634\u062F.");
+      return;
+  }
+}
+async function gotLesson(c, u, d, text) {
+  const { env } = c, rule = text.replace(/\s+/g, " ").trim().slice(0, 300);
+  if (rule.length < 6) return void await send(env, u.id, "\u0642\u0627\u0646\u0648\u0646 \u062E\u06CC\u0644\u06CC \u06A9\u0648\u062A\u0627\u0647 \u0627\u0633\u062A\u061B \u06A9\u0645\u06CC \u0648\u0627\u0636\u062D\u200C\u062A\u0631 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.");
+  await clearSession(env, u.id);
+  if (d.id) {
+    await env.DB.prepare("UPDATE ea_lessons SET rule=? WHERE id=? AND user_id=?").bind(rule, Number(d.id), u.id).run();
+    return void await send(env, u.id, "\u2705 \u0642\u0627\u0646\u0648\u0646 \u0628\u0647\u200C\u0631\u0648\u0632 \u0634\u062F.", lessonKb(Number(d.id)));
+  }
+  await addLesson(env, u.id, rule, "owner");
+  await send(env, u.id, "\u2705 \u0642\u0627\u0646\u0648\u0646 \u0627\u0636\u0627\u0641\u0647 \u0634\u062F\u061B \u0627\u0632 \u0627\u06CC\u0646 \u0628\u0647 \u0628\u0639\u062F \u0627\u06CC\u062C\u0646\u062A \u0648 \u0646\u0627\u0638\u0631 \u0631\u0639\u0627\u06CC\u062A\u0634 \u0645\u06CC\u200C\u06A9\u0646\u0646\u062F.");
+}
+async function gotBotToken(c, u, m, text, role) {
+  const { env } = c;
+  await del(env, u.id, m.message_id);
+  const token = text.trim();
+  if (!/^\d{6,}:[A-Za-z0-9_-]{20,}$/.test(token)) return void await send(env, u.id, "\u274C \u0642\u0627\u0644\u0628 \u062A\u0648\u06A9\u0646 \u062F\u0631\u0633\u062A \u0646\u06CC\u0633\u062A (\u0645\u062B\u0644 123456:ABC\u2026). \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u06CC\u0627 /cancel.");
+  const r = await setRoleBot(env, u.id, role, token);
+  if (!r.ok) return void await send(env, u.id, `\u274C \u062A\u0644\u06AF\u0631\u0627\u0645 \u062A\u0648\u06A9\u0646 \u0631\u0627 \u0646\u067E\u0630\u06CC\u0631\u0641\u062A: ${esc(r.error)}`);
+  await clearSession(env, u.id);
+  await send(env, u.id, `\u2705 \u0631\u0628\u0627\u062A ${ROLES[role].fa} \u062B\u0628\u062A \u0634\u062F: @${esc(r.name)}${r.inGroup === false ? "\n\u26A0\uFE0F \u0647\u0646\u0648\u0632 \u062F\u0631 \u06AF\u0631\u0648\u0647 \u0646\u06CC\u0633\u062A\u061B \u0622\u0646 \u0631\u0627 \u0628\u0647 \u06AF\u0631\u0648\u0647 \u0627\u0636\u0627\u0641\u0647 \u0648 \u0627\u062F\u0645\u06CC\u0646 \u06A9\u0646\u06CC\u062F (\u062A\u0627 \u0622\u0646 \u0645\u0648\u0642\u0639 \u0647\u0645\u06CC\u0646 \u0631\u0628\u0627\u062A \u0628\u0647 \u0646\u0627\u0645 \u0627\u0648 \u0645\u06CC\u200C\u0646\u0648\u06CC\u0633\u062F)." : r.inGroup ? "\n\u2705 \u062F\u0631 \u06AF\u0631\u0648\u0647 \u0639\u0636\u0648 \u0627\u0633\u062A." : "\n\u0628\u0639\u062F \u0627\u0632 \u0627\u062A\u0635\u0627\u0644 \u06AF\u0631\u0648\u0647\u060C \u0622\u0646 \u0631\u0627 \u062F\u0631 \u06AF\u0631\u0648\u0647 \u0627\u062F\u0645\u06CC\u0646 \u06A9\u0646\u06CC\u062F."}`);
+}
+async function onAskCallback(c, u, q, act2, arg) {
+  const { env } = c, id = Number(arg);
+  await answer(env, q.id);
+  if (act2 === "skip") {
+    await env.DB.prepare("UPDATE ea_asks SET status='skipped' WHERE id=? AND user_id=? AND status='open'").bind(id, u.id).run();
+    return void await send(env, u.id, "\u23ED \u0646\u0627\u062F\u06CC\u062F\u0647 \u06AF\u0631\u0641\u062A\u0647 \u0634\u062F.");
+  }
+  const a = await env.DB.prepare("SELECT question FROM ea_asks WHERE id=? AND user_id=? AND status='open'").bind(id, u.id).first();
+  if (!a) return void await send(env, u.id, "\u0627\u06CC\u0646 \u0633\u0624\u0627\u0644 \u062F\u06CC\u06AF\u0631 \u0628\u0627\u0632 \u0646\u06CC\u0633\u062A.");
+  await setSession(env, u.id, "as_ans", { id });
+  await send(env, u.id, `\u{1F4AC} \u067E\u0627\u0633\u062E\u062A\u0627\u0646 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F:
+
+<i>${esc(a.question)}</i>
+
+\u0644\u063A\u0648: /cancel`);
+}
+async function gotAnswer(c, u, d, text) {
+  await clearSession(c.env, u.id);
+  const ok = await answerAsk(c.env, u.id, Number(d.id), text);
+  await send(c.env, u.id, ok ? "\u2705 \u067E\u0627\u0633\u062E \u0634\u0645\u0627 \u0628\u0647 \u0634\u0648\u0631\u0627 \u0631\u0633\u06CC\u062F\u061B \u0646\u0627\u0638\u0631 \u0648 \u062F\u0633\u062A\u06CC\u0627\u0631 \u062A\u0627 \u06CC\u06A9 \u062F\u0642\u06CC\u0642\u0647\u200C\u06CC \u062F\u06CC\u06AF\u0631 \u0631\u0648\u06CC \u0622\u0646 \u06A9\u0627\u0631 \u0645\u06CC\u200C\u06A9\u0646\u0646\u062F." : "\u0627\u06CC\u0646 \u0633\u0624\u0627\u0644 \u062F\u06CC\u06AF\u0631 \u0628\u0627\u0632 \u0646\u06CC\u0633\u062A.");
+}
+
+// eitaa-src/council.ts
+var MAX_TURNS = 6;
+var MAX_SAYS = 5;
+var MAX_ACTIONS = 3;
+var DAY_CAP = 10;
+var GAP_S = 300;
+async function enqueue(env, uid, kind, payload = "") {
+  await env.DB.prepare("INSERT INTO ea_events(user_id,kind,payload,status,created_at) VALUES(?,?,?,'new',?)").bind(uid, kind, typeof payload === "string" ? payload : JSON.stringify(payload), now()).run();
+}
+var dayKey = (uid) => `cc:${uid}:${new Date(Date.now() + 126e5).toISOString().slice(0, 10)}`;
+var T = (name, description, properties, required = []) => ({ type: "function", function: { name, description, parameters: { type: "object", properties, required } } });
+var TOOLS2 = [
+  T("say", "Say something to the other agent in the council chat (Persian, max 3 short sentences).", { text: { type: "string" } }, ["text"]),
+  T("ask_owner", "Ask the OWNER (a human) for a decision, opinion or help. Only when really needed; one clear question, with suggested options.", { question: { type: "string" } }, ["question"]),
+  T("delete_post", "Delete a post: removes the group copy and tries to remove it from Eitaa.", { id: { type: "integer" }, reason: { type: "string" } }, ["id", "reason"]),
+  T("fix_post", "Correct a post: the old one is deleted and the corrected text is re-published (group first, then supervisor review, then Eitaa).", { id: { type: "integer" }, text: { type: "string", description: "the FULL corrected text including the owner's signature" }, reason: { type: "string" } }, ["id", "text", "reason"]),
+  T("lesson_add", "Save a new general lesson (rule) so the mistake never repeats.", { rule: { type: "string" } }, ["rule"]),
+  T("lesson_edit", "Rewrite an existing lesson by its id (make it clearer or merge duplicates).", { id: { type: "integer" }, rule: { type: "string" } }, ["id", "rule"]),
+  T("lesson_delete", "Delete a wrong, duplicated or outdated lesson by its id.", { id: { type: "integer" }, reason: { type: "string" } }, ["id"]),
+  T("set_review", "Turn the supervisor's pre-publication review on or off.", { on: { type: "boolean" } }, ["on"]),
+  T("finish", "End the council session (nothing more to say or do).", {})
+];
+var COMMON = 'You are one of two AI agents that run quality control for a Persian-language Eitaa channel owned by a human ("the owner"). The conversation happens in a Telegram group chat the owner can read. Write Persian, warm but sharp and concrete; max 3 short sentences per message; no filler, no repeating what was already said. Ground every claim in the CONTEXT below (post ids, lesson ids). Never invent ids. Use tools to act \u2014 saying you will do something is not doing it. Eitaa cannot edit a message: an edit = delete the old post + publish the corrected one (fix_post does exactly that). Prefer fix_post over delete_post; never touch a post that is fine. Lessons must be general, imperative, \u2264160 chars, no duplicates. At most ' + MAX_ACTIONS + " post actions per session. If nothing needs doing: one short sentence, then finish. ";
+var PROMPT = {
+  sup: COMMON + "YOU ARE \xAB\u0646\u0627\u0638\u0631\xBB (the supervisor): you inspect every post before it reaches Eitaa. In the council you REPORT honestly what happened (errors you found, what you fixed or held, what you were unsure about), what you LEARNED (propose precise lessons) and where you might be wrong. You follow the assistant's orders unless one would clearly harm the owner \u2014 then object with a reason. Ask the assistant for his opinion on your lessons.",
+  asst: COMMON + "YOU ARE \xAB\u062F\u0633\u062A\u06CC\u0627\u0631\xBB (the assistant): the coordinating brain and the supervisor's boss. You answer what the supervisor reports: give a real opinion (agree, challenge, refine), clean up the lessons (merge duplicates, make vague ones precise, delete wrong ones), and ORDER the supervisor to act when needed (use the tools yourself and say what you ordered). When a decision needs the human (policy, taste, risk, missing information) use ask_owner \u2014 one clear question with suggested answers; do not ask what you can decide. When the owner has spoken, address him directly and act on it."
+};
+async function context(env, uid, events) {
+  const g = await getGroup(env, uid);
+  const lessons = (await env.DB.prepare("SELECT id, rule FROM ea_lessons WHERE user_id=? ORDER BY id DESC LIMIT 30").bind(uid).all()).results;
+  const posts = (await env.DB.prepare("SELECT p.id, p.status, p.kind, substr(p.text,1,90) t, COALESCE(u.verdict,'') v, COALESCE(u.note,'') n FROM ea_posts p LEFT JOIN ea_pubs u ON u.post_id=p.id WHERE p.user_id=? ORDER BY p.id DESC LIMIT 12").bind(uid).all()).results;
+  const hist = (await env.DB.prepare("SELECT role, text FROM ea_council WHERE user_id=? ORDER BY id DESC LIMIT 8").bind(uid).all()).results.reverse();
+  const asks = (await env.DB.prepare("SELECT id, question, answer, status FROM ea_asks WHERE user_id=? ORDER BY id DESC LIMIT 4").bind(uid).all()).results;
+  const t = /* @__PURE__ */ new Date();
+  return `
+
+CONTEXT
+Today (Tehran): ${jalaliLong(Math.floor(t.getTime() / 1e3))}
+Supervisor review before Eitaa: ${g?.review === false ? "OFF" : "ON"}
+LESSONS (id: rule):
+${lessons.length ? lessons.map((l) => `${l.id}: ${l.rule}`).join("\n") : "(none yet)"}
+RECENT POSTS (id status verdict note | text):
+${posts.length ? posts.map((p) => `#${p.id} ${p.status}${p.kind === "file" ? " +media" : ""} ${p.v}${p.n ? " \xAB" + p.n.slice(0, 80) + "\xBB" : ""} | ${p.t.replace(/\s+/g, " ")}`).join("\n") : "(none)"}
+OWNER QUESTIONS:
+${asks.length ? asks.map((a) => `#${a.id} [${a.status}] ${a.question.slice(0, 120)}${a.answer ? " \u2192 OWNER ANSWERED: " + a.answer.slice(0, 200) : ""}`).join("\n") : "(none)"}
+EARLIER COUNCIL CHAT:
+${hist.length ? hist.map((h) => `${roleName(h.role)}: ${h.text.slice(0, 200)}`).join("\n") : "(none)"}
+WHY THIS SESSION:
+${events.join("\n").slice(0, 1800)}`;
+}
+var logLine = (env, uid, role, text) => env.DB.prepare("INSERT INTO ea_council(user_id,role,text,created_at) VALUES(?,?,?,?)").bind(uid, role, text.slice(0, 1500), now()).run();
+var councilSay = async (env, uid, role, text) => {
+  await logLine(env, uid, role, text);
+  if (role !== "owner") await sayAs(env, uid, role, "council", esc(text));
+};
+async function getPost2(env, uid, id) {
+  return env.DB.prepare("SELECT * FROM ea_posts WHERE id=? AND user_id=?").bind(id, uid).first();
+}
+async function act(env, uid, role, name, a, st) {
+  const int = (x) => Math.trunc(Number(x));
+  switch (name) {
+    case "say": {
+      const text = String(a.text || "").trim();
+      if (!text) return "empty";
+      if (st.says >= MAX_SAYS) return "too many messages; finish";
+      st.says++;
+      await councilSay(env, uid, role, text);
+      return "sent";
+    }
+    case "finish":
+      st.done = true;
+      return "ok";
+    case "ask_owner": {
+      const q = String(a.question || "").trim().slice(0, 700);
+      if (!q) return "empty question";
+      if ((await env.DB.prepare("SELECT COUNT(*) n FROM ea_asks WHERE user_id=? AND status='open'").bind(uid).first()).n >= 3) return "there are already 3 open questions; wait for the owner";
+      const id = (await env.DB.prepare("INSERT INTO ea_asks(user_id,role,question,created_at) VALUES(?,?,?,?)").bind(uid, role, q, now()).run()).meta.last_row_id;
+      await logLine(env, uid, role, `\u2753 (\u0627\u0632 \u0645\u0627\u0644\u06A9) ${q}`);
+      await sayAs(env, uid, role, "council", `\u2753 <b>\u0627\u0632 \u0634\u0645\u0627:</b> ${esc(q)}
+
+<i>\u0647\u0645\u06CC\u0646\u200C\u062C\u0627 \u06CC\u0627 \u0627\u0632 \u0631\u0628\u0627\u062A \u067E\u0627\u0633\u062E \u062F\u0647\u06CC\u062F.</i>`);
+      await send(env, uid, `\u2753 <b>${roleName(role)} \u0627\u0632 \u0634\u0645\u0627 \u06A9\u0645\u06A9 \u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u062F</b>
+
+${esc(q)}`, ikb([[["\u{1F4AC} \u067E\u0627\u0633\u062E \u062F\u0627\u062F\u0646", `as:ans:${id}`], ["\u23ED \u0646\u0627\u062F\u06CC\u062F\u0647", `as:skip:${id}`]]]));
+      st.waiting = true;
+      return `asked (#${id}); the session ends until the owner answers`;
+    }
+    case "delete_post":
+    case "fix_post": {
+      if (st.actions >= MAX_ACTIONS) return "action limit reached";
+      const p = await getPost2(env, uid, int(a.id));
+      if (!p) return "no such post";
+      if (!["pending", "held", "sent", "failed"].includes(p.status)) return `post is ${p.status}; cannot act`;
+      st.actions++;
+      if (name === "delete_post") {
+        const r2 = await removePost(env, p, "deleted");
+        await markGroup(env, p.id, "\u{1F5D1}").catch(() => null);
+        const line2 = `\u{1F5D1} \u067E\u0633\u062A #${p.id} \u062D\u0630\u0641 \u0634\u062F (${String(a.reason || "").slice(0, 120)})${r2.eitaa === "manual" ? " \u2014 \u26A0\uFE0F \u0627\u0632 \u0627\u06CC\u062A\u0627 \u0628\u0627\u06CC\u062F \u062F\u0633\u062A\u06CC \u062D\u0630\u0641 \u0634\u0648\u062F" : r2.eitaa === "removed" ? " \u2014 \u0627\u0632 \u0627\u06CC\u062A\u0627 \u0647\u0645 \u067E\u0627\u06A9 \u0634\u062F" : ""}`;
+        await logLine(env, uid, role, line2);
+        await sayAs(env, uid, role, "reports", esc(line2));
+        return line2;
+      }
+      const text = String(a.text || "").trim();
+      if (!text || p.kind === "file" && text.length > 1e3) return "invalid text (empty, or >1000 chars for a media post)";
+      const r = await replacePost(env, p, { text, keepJob: true });
+      const line = `\u270F\uFE0F \u067E\u0633\u062A #${p.id} \u0627\u0635\u0644\u0627\u062D \u0634\u062F \u2190 \u067E\u0633\u062A \u062C\u062F\u06CC\u062F #${r.id} (${String(a.reason || "").slice(0, 120)})${r.note ? " \u2014 \u26A0\uFE0F \u0646\u0633\u062E\u0647\u200C\u06CC \u0642\u0628\u0644\u06CC \u062F\u0631 \u0627\u06CC\u062A\u0627 \u062F\u0633\u062A\u06CC \u062D\u0630\u0641 \u0634\u0648\u062F" : ""}`;
+      await logLine(env, uid, role, line);
+      await sayAs(env, uid, role, "reports", esc(line));
+      return line;
+    }
+    case "lesson_add": {
+      const ok = await addLesson(env, uid, String(a.rule || ""), `council:${role}`);
+      return ok ? "lesson saved" : "not saved (too short or duplicate)";
+    }
+    case "lesson_edit": {
+      const rule = String(a.rule || "").replace(/\s+/g, " ").trim().slice(0, 300);
+      if (rule.length < 6) return "rule too short";
+      const r = await env.DB.prepare("UPDATE ea_lessons SET rule=? WHERE id=? AND user_id=?").bind(rule, int(a.id), uid).run();
+      return r.meta.changes ? "lesson updated" : "no such lesson";
+    }
+    case "lesson_delete": {
+      const r = await env.DB.prepare("DELETE FROM ea_lessons WHERE id=? AND user_id=?").bind(int(a.id), uid).run();
+      return r.meta.changes ? "lesson deleted" : "no such lesson";
+    }
+    case "set_review": {
+      const g = await getGroup(env, uid);
+      if (!g) return "no group";
+      g.review = !!a.on;
+      await saveGroup(env, uid, g);
+      return `review ${g.review ? "ON" : "OFF"}`;
+    }
+  }
+  return "unknown tool";
+}
+async function runSession(env, uid, events, first = "sup") {
+  const ctx = await context(env, uid, events);
+  const st = { actions: 0, waiting: false, done: false, says: 0 };
+  const transcript = [];
+  let role = first, idle = 0, turns = 0;
+  for (; turns < MAX_TURNS && !st.done && !st.waiting; turns++, role = role === "sup" ? "asst" : "sup") {
+    const other = role === "sup" ? "assistant" : "supervisor";
+    const messages = [
+      { role: "system", content: PROMPT[role] + ctx },
+      { role: "user", content: `${transcript.length ? "SESSION SO FAR:\n" + transcript.join("\n") : "The session starts now."}
+
+Your turn (${role === "sup" ? "supervisor" : "assistant"}). Speak to the ${other} with say, act with the other tools, or finish.` }
+    ];
+    let m;
+    try {
+      m = await chatTools(env, messages, TOOLS2, 4e4, 900);
+    } catch {
+      break;
+    }
+    const before = st.says + st.actions;
+    if (!m.tool_calls?.length) {
+      const txt = (m.content || "").trim();
+      if (txt) await act(env, uid, role, "say", { text: txt }, st).then((r) => transcript.push(`${roleName(role)}: ${txt}`));
+    }
+    for (const c of m.tool_calls || []) {
+      let a = {};
+      try {
+        a = JSON.parse(c.function.arguments || "{}");
+      } catch {
+      }
+      const out = await act(env, uid, role, c.function.name, a, st).catch((e) => `error: ${e.message}`);
+      transcript.push(c.function.name === "say" ? `${roleName(role)}: ${String(a.text || "")}` : `${roleName(role)} \u2192 ${c.function.name}(${JSON.stringify(a).slice(0, 220)}) \u21D2 ${out}`);
+    }
+    if (st.says + st.actions === before) {
+      if (++idle >= 2) break;
+    } else idle = 0;
+  }
+  return { turns, says: st.says };
+}
+var describeEvent = (e) => {
+  let p = {};
+  try {
+    p = JSON.parse(e.payload);
+  } catch {
+    p = { text: e.payload };
+  }
+  switch (e.kind) {
+    case "held":
+      return `Supervisor HELD post #${p.id} (not sent to Eitaa): ${(p.problems || []).join("; ")}`;
+    case "fixed":
+      return `Supervisor auto-FIXED post #${p.id} before publishing: ${(p.problems || []).join("; ")}`;
+    case "reported_error":
+      return `OWNER reported an error on post #${p.id}: \xAB${p.error}\xBB. Lesson saved: ${p.lesson || "(none)"}. ${p.fixed ? "It was fixed and re-published." : "It could not be fixed automatically."}`;
+    case "owner_answer":
+      return `OWNER ANSWERED the question #${p.id} (\xAB${p.question}\xBB): \xAB${p.answer}\xBB. Act on it now.`;
+    case "owner_note":
+      return `OWNER wrote in the council chat: \xAB${p.text}\xBB. Answer him and act.`;
+    case "digest":
+      return `Periodic review: the supervisor summarises what he learned; the assistant cleans the lessons (merge duplicates, sharpen vague ones, delete wrong ones).`;
+    default:
+      return `Manual session requested by the owner${p.text ? ": " + p.text : ""}.`;
+  }
+};
+async function processCouncil(env) {
+  const t = now();
+  if (t % 3600 < 60) await scheduleDigests(env);
+  const row = await env.DB.prepare("SELECT user_id FROM ea_events WHERE status='new' ORDER BY id LIMIT 1").first();
+  if (!row) return;
+  const uid = row.user_id;
+  const evs = (await env.DB.prepare("SELECT id, kind, payload FROM ea_events WHERE user_id=? AND status='new' ORDER BY id LIMIT 12").bind(uid).all()).results;
+  const ids = evs.map((e) => e.id).join(",");
+  const mark = (s) => env.DB.prepare(`UPDATE ea_events SET status=? WHERE id IN (${ids})`).bind(s).run();
+  if (!await getGroup(env, uid)) return void await mark("skipped");
+  const urgent = evs.some((e) => e.kind.startsWith("owner") || e.kind === "manual");
+  const used = Number(await kvGet(env, dayKey(uid)) || 0), last = Number(await kvGet(env, `cclast:${uid}`) || 0);
+  if (used >= (urgent ? DAY_CAP * 3 : DAY_CAP)) return void await mark("skipped");
+  if (!urgent && t - last < GAP_S) return;
+  await mark("running");
+  await kvSet(env, dayKey(uid), String(used + 1));
+  await kvSet(env, `cclast:${uid}`, String(t));
+  try {
+    const first = evs.every((e) => e.kind === "owner_answer" || e.kind === "owner_note") ? "asst" : "sup";
+    await runSession(env, uid, evs.map(describeEvent), first);
+    await mark("done");
+  } catch (e) {
+    console.error("council failed", e.message);
+    await mark("failed");
+  }
+}
+async function scheduleDigests(env) {
+  const users = (await env.DB.prepare("SELECT k FROM ea_kv WHERE k LIKE 'grp:%'").all()).results.map((r) => Number(r.k.slice(4)));
+  for (const uid of users) {
+    const n = (await env.DB.prepare("SELECT COUNT(*) n FROM ea_lessons WHERE user_id=?").bind(uid).first()).n;
+    const last = await kvGet(env, `ccdig:${uid}`) || "0:0";
+    const [ts, cnt] = last.split(":").map(Number);
+    if (n >= 3 && n !== cnt && now() - ts > 86400) {
+      await kvSet(env, `ccdig:${uid}`, `${now()}:${n}`);
+      await enqueue(env, uid, "digest");
+    }
+  }
+}
+async function answerAsk(env, uid, askId, answer2) {
+  const a = await env.DB.prepare("SELECT * FROM ea_asks WHERE id=? AND user_id=? AND status='open'").bind(askId, uid).first();
+  if (!a) return false;
+  await env.DB.prepare("UPDATE ea_asks SET status='answered', answer=? WHERE id=?").bind(answer2.slice(0, 1e3), askId).run();
+  await logLine(env, uid, "owner", answer2);
+  await enqueue(env, uid, "owner_answer", { id: askId, question: a.question.slice(0, 200), answer: answer2.slice(0, 600) });
+  return true;
+}
+async function ownerSpoke(env, uid, text) {
+  const open2 = await env.DB.prepare("SELECT id FROM ea_asks WHERE user_id=? AND status='open' ORDER BY id DESC LIMIT 1").bind(uid).first();
+  if (open2 && await answerAsk(env, uid, open2.id, text)) return;
+  await logLine(env, uid, "owner", text);
+  await enqueue(env, uid, "owner_note", { text: text.slice(0, 600) });
+}
 
 // eitaa-src/scheduler.ts
 var sleep2 = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -1818,6 +2714,7 @@ ${why.map((x) => "\u2022 " + esc(x)).join("\n")}
   const rows = [[["\u270F\uFE0F \u062A\u0635\u062D\u06CC\u062D", `pm:fix:${p.id}`], ["\u{1F5BC} \u0627\u0641\u0632\u0648\u062F\u0646 \u0639\u06A9\u0633/\u0648\u06CC\u062F\u06CC\u0648", `pm:media:${p.id}`]], [[kind === "media" ? "\u{1F4DD} \u0627\u0631\u0633\u0627\u0644 \u0641\u0642\u0637 \u0645\u062A\u0646" : "\u{1F680} \u0627\u0631\u0633\u0627\u0644 \u0628\u0627 \u0647\u0645\u06CC\u0646 \u0648\u0636\u0639\u06CC\u062A", `pm:force:${p.id}`], ["\u{1F5D1} \u062D\u0630\u0641", `pm:del:${p.id}`]]];
   await report(env, p.user_id, msg, void 0, false);
   await send(env, p.user_id, msg, ikb(rows));
+  if (kind === "review") await enqueue(env, p.user_id, "held", { id: p.id, problems: why }).catch(() => null);
 }
 async function gate(env, p, ch, file) {
   const grp = await getGroup(env, p.user_id);
@@ -1846,6 +2743,7 @@ async function gate(env, p, ch, file) {
     } catch {
     }
     await setVerdict(env, p.id, p.user_id, "fixed", r.problems.join(" \xB7 "));
+    await enqueue(env, p.user_id, "fixed", { id: p.id, problems: r.problems }).catch(() => null);
     await report(env, p.user_id, `\u{1F6E1} <b>\u0646\u0627\u0638\u0631</b> \xB7 \u067E\u0633\u062A #${p.id} \u0627\u06CC\u0631\u0627\u062F \u062F\u0627\u0634\u062A \u0648 \u0627\u0635\u0644\u0627\u062D \u0634\u062F (\u0646\u0633\u062E\u0647\u200C\u06CC \u0642\u0628\u0644\u06CC \u0627\u0632 \u06AF\u0631\u0648\u0647 \u067E\u0627\u06A9 \u0634\u062F\u061B \u0646\u0633\u062E\u0647\u200C\u06CC \u062F\u0631\u0633\u062A \u0627\u0648\u0644 \u062F\u0631 \u06AF\u0631\u0648\u0647\u060C \u0628\u0639\u062F \u062F\u0631 \u0627\u06CC\u062A\u0627):
 ${r.problems.map((x) => "\u2022 " + esc(x)).join("\n") || "\u2022 \u0627\u0635\u0644\u0627\u062D \u062C\u0632\u0626\u06CC"}`);
     return q;
@@ -1931,7 +2829,7 @@ async function start(env, u) {
   await setSession(env, u.id, "chat", { hist: [], last_mid: 0, busy_until: 0 });
   await send(env, u.id, INTRO);
 }
-var TOOLS2 = [
+var TOOLS3 = [
   { type: "function", function: {
     name: "read_channel",
     description: "Latest posts of a PUBLIC Eitaa channel (@id), newest first, short previews (ref, text; image/sticker=1).",
@@ -1975,7 +2873,7 @@ HIS CHANNELS: ${chans.map((x) => `id=${x.id} \xAB${x.title}\xBB (@${x.chat_id})`
   };
   const insert = async (ch, kind, body, file, name, runAt) => (await env.DB.prepare("INSERT INTO ea_posts(user_id,channel_id,kind,text,file_id,file_name,title,silent,pin,view_delete,run_at,status,created_at,src_url) VALUES(?,?,?,?,'',?,'',0,0,0,?,'pending',?,?)").bind(uid, ch.id, kind, body, name, runAt, now(), file).run()).meta.last_row_id;
   const toMe = /(واسم|برام|برایم|بهم|نشانم|نشونم|به من|برای من|بفرست برام)/.test(text) && !/(کانالم|کانال من|کانال خودم|داخل کانال من|توی کانال من)/.test(text);
-  const tools = toMe ? TOOLS2.filter((x) => x.function.name !== "post_to_channel" && x.function.name !== "schedule_post") : TOOLS2;
+  const tools = toMe ? TOOLS3.filter((x) => x.function.name !== "post_to_channel" && x.function.name !== "schedule_post") : TOOLS3;
   const notes = [];
   const exec = async (name, a) => {
     switch (name) {
@@ -2071,243 +2969,6 @@ HIS CHANNELS: ${chans.map((x) => `id=${x.id} \xAB${x.title}\xBB (@${x.chat_id})`
   if (cur.state === "chat") await setSession(env, uid, "chat", { hist: keep, last_mid: m.message_id, busy_until: 0 });
 }
 
-// eitaa-src/manage.ts
-var MAX_CAPTION = 1e3;
-var back = (id) => [["\u21A9\uFE0F \u0628\u0631\u06AF\u0634\u062A", `pm:back:${id}`]];
-var getPost = (env, id) => env.DB.prepare("SELECT * FROM ea_posts WHERE id=?").bind(id).first();
-var ACTIVE = /* @__PURE__ */ new Set(["pending", "sending", "sent", "held", "failed", "draft"]);
-var STATUS = { pending: "\u23F3 \u062F\u0631 \u0635\u0641 \u0627\u0631\u0633\u0627\u0644", sending: "\u23F3 \u062F\u0631 \u062D\u0627\u0644 \u0627\u0631\u0633\u0627\u0644", sent: "\u2705 \u062F\u0631 \u0627\u06CC\u062A\u0627 \u0645\u0646\u062A\u0634\u0631 \u0634\u062F\u0647", held: "\u23F8 \u0646\u06AF\u0647\u200C\u062F\u0627\u0634\u062A\u0647 \u0634\u062F (\u062F\u0631 \u0627\u06CC\u062A\u0627 \u0646\u06CC\u0633\u062A)", failed: "\u274C \u0627\u0631\u0633\u0627\u0644 \u0646\u0627\u0645\u0648\u0641\u0642", draft: "\u{1F4DD} \u067E\u06CC\u0634\u200C\u0646\u0648\u06CC\u0633", deleted: "\u{1F5D1} \u062D\u0630\u0641 \u0634\u062F\u0647", replaced: "\u267B\uFE0F \u062C\u0627\u06CC\u06AF\u0632\u06CC\u0646 \u0634\u062F\u0647", canceled: "\u{1F6AB} \u0644\u063A\u0648 \u0634\u062F\u0647" };
-async function open(c, u, postId) {
-  const { env } = c;
-  await clearSession(env, u.id);
-  const p = await getPost(env, postId);
-  if (!p || p.user_id !== u.id) return void await send(env, u.id, "\u0627\u06CC\u0646 \u067E\u0633\u062A \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F \u06CC\u0627 \u0645\u0627\u0644 \u0634\u0645\u0627 \u0646\u06CC\u0633\u062A.");
-  try {
-    let file = null;
-    if (p.kind === "file") {
-      try {
-        file = await loadMedia(env, p);
-      } catch {
-      }
-    }
-    await sendCopy(env, { chat: u.id }, p, file);
-  } catch (e) {
-    await send(env, u.id, `<i>(\u067E\u06CC\u0634\u200C\u0646\u0645\u0627\u06CC\u0634 \u067E\u0633\u062A \u0645\u0645\u06A9\u0646 \u0646\u0634\u062F: ${esc(e.message)})</i>
-${esc(p.text.slice(0, 1500))}`);
-  }
-  const pub = await getPub(env, p.id);
-  const next = pub?.note?.startsWith("replaced_by:") ? Number(pub.note.split(":")[1]) : 0;
-  const st = `${STATUS[p.status] || p.status}${p.status === "held" || p.status === "failed" ? `
-<i>${esc(p.error)}</i>` : ""}`;
-  if (!ACTIVE.has(p.status)) {
-    return void await send(env, u.id, `<b>\u067E\u0633\u062A #${p.id}</b>
-${st}${next ? "\n\u0646\u0633\u062E\u0647\u200C\u06CC \u062C\u062F\u06CC\u062F: #" + next : ""}`, next ? ikb([[["\u{1F4C4} \u0628\u0627\u0632 \u06A9\u0631\u062F\u0646 \u0646\u0633\u062E\u0647\u200C\u06CC \u062C\u062F\u06CC\u062F", `pm:open:${next}`]]]) : void 0);
-  }
-  await send(env, u.id, `<b>\u067E\u0633\u062A #${p.id}</b> \xB7 ${st}
-
-\u0686\u0647 \u06A9\u0627\u0631\u06CC \u0645\u06CC\u200C\u062E\u0648\u0627\u0647\u06CC\u062F \u0627\u0646\u062C\u0627\u0645 \u062F\u0647\u06CC\u062F\u061F`, ikb([
-    [["\u{1F6A9} \u06AF\u0632\u0627\u0631\u0634 \u062E\u0637\u0627", `pm:err:${p.id}`], ["\u270F\uFE0F \u062A\u0635\u062D\u06CC\u062D", `pm:fix:${p.id}`]],
-    [["\u{1F5D1} \u062D\u0630\u0641 \u067E\u06CC\u0627\u0645", `pm:del:${p.id}`], ["\u{1F5BC} \u0627\u0641\u0632\u0648\u062F\u0646 \u0639\u06A9\u0633/\u0648\u06CC\u062F\u06CC\u0648 \u0648 \u0627\u0631\u0633\u0627\u0644 \u0645\u062C\u062F\u062F", `pm:media:${p.id}`]]
-  ]));
-}
-async function removePost(env, p, status) {
-  await removeFromGroup(env, p.id);
-  let eitaaRes = "none", error = "";
-  if (p.status === "sent") {
-    const user = await getUser(env, p.user_id), ch = await env.DB.prepare("SELECT chat_id FROM ea_channels WHERE id=?").bind(p.channel_id).first();
-    const token = user ? await dec(env.SECRET_KEY, user.eitaa_token_enc) : "";
-    if (token && ch) {
-      const r = await deleteMessage(env, token, ch.chat_id, p.eitaa_message_id || "");
-      eitaaRes = r.ok ? "removed" : "manual";
-      error = r.error;
-    } else eitaaRes = "manual";
-  }
-  await env.DB.prepare("UPDATE ea_posts SET status=? WHERE id=?").bind(status, p.id).run();
-  return { eitaa: eitaaRes, error };
-}
-var eitaaNote = async (env, p, r) => {
-  if (r.eitaa !== "manual") return "";
-  const ch = await env.DB.prepare("SELECT chat_id, title FROM ea_channels WHERE id=?").bind(p.channel_id).first();
-  return `
-
-\u26A0\uFE0F \u0627\u06CC\u062A\u0627\u06CC\u0627\u0631 \u062F\u0631 API \u062E\u0648\u062F \xAB\u062D\u0630\u0641 \u067E\u06CC\u0627\u0645\xBB \u0646\u062F\u0627\u0631\u062F\u060C \u067E\u0633 \u0646\u0633\u062E\u0647\u200C\u06CC \u0642\u0628\u0644\u06CC \u0647\u0646\u0648\u0632 \u062F\u0631 \u0627\u06CC\u062A\u0627 \u0645\u0627\u0646\u062F\u0647${p.eitaa_message_id ? ` (\u067E\u06CC\u0627\u0645 ${esc(p.eitaa_message_id)})` : ""}${ch ? ` \u2014 \u0644\u0637\u0641\u0627\u064B \u0622\u0646 \u0631\u0627 \u062F\u0631 \u06A9\u0627\u0646\u0627\u0644 \xAB${esc(ch.title)}\xBB \u062F\u0633\u062A\u06CC \u062D\u0630\u0641 \u06A9\u0646\u06CC\u062F` : ""}.${r.error ? `
-<i>${esc(r.error.slice(0, 120))}</i>` : ""}`;
-};
-async function replacePost(env, old, patch) {
-  const n = { ...old, ...patch };
-  const r = await env.DB.prepare("INSERT INTO ea_posts(user_id,channel_id,kind,text,file_id,file_name,title,silent,pin,view_delete,run_at,status,created_at,src_url,job_id,error) VALUES(?,?,?,?,?,?,?,?,?,?,?,'pending',?,?,?,'')").bind(old.user_id, old.channel_id, n.kind, n.text, n.file_id, n.file_name, old.title, old.silent, old.pin, old.view_delete, now(), now(), n.src_url, patch.keepJob ? old.job_id : null).run();
-  const id = r.meta.last_row_id;
-  const rm = await removePost(env, old, "replaced");
-  await setVerdict(env, old.id, old.user_id, "replaced", `replaced_by:${id}`);
-  return { id, note: await eitaaNote(env, old, rm) };
-}
-async function onCallback2(c, u, q, act, arg) {
-  const { env } = c, id = Number(arg);
-  await answer(env, q.id);
-  if (act === "open" || act === "back") return open(c, u, id);
-  const p = await getPost(env, id);
-  if (!p || p.user_id !== u.id) return void await send(env, u.id, "\u0627\u06CC\u0646 \u067E\u0633\u062A \u067E\u06CC\u062F\u0627 \u0646\u0634\u062F.");
-  if (!ACTIVE.has(p.status)) return open(c, u, id);
-  switch (act) {
-    case "err":
-      await setSession(env, u.id, "pm_err", { id });
-      return void await send(env, u.id, "\u{1F6A9} \u0644\u0637\u0641\u0627\u064B \u062E\u0637\u0627 \u0631\u0627 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F (\u0645\u062B\u0644\u0627\u064B: \xAB\u0622\u062E\u0631 \u0645\u062A\u0646 \u0622\u06CC\u062F\u06CC \u06A9\u0627\u0646\u0627\u0644 \u062F\u06CC\u06AF\u0631\u06CC \u0645\u0627\u0646\u062F\u0647\xBB \u06CC\u0627 \xAB\u062A\u0627\u0631\u06CC\u062E \u0627\u0634\u062A\u0628\u0627\u0647 \u0627\u0633\u062A\xBB).\n\u0627\u0632 \u0631\u0648\u06CC \u0622\u0646 \u06CC\u06A9 \u0642\u0627\u0646\u0648\u0646 \u06CC\u0627\u062F \u0645\u06CC\u200C\u06AF\u06CC\u0631\u0645 \u062A\u0627 \u062A\u06A9\u0631\u0627\u0631 \u0646\u0634\u0648\u062F \u0648 \u0627\u06AF\u0631 \u0628\u0634\u0648\u062F \u062F\u0631\u0633\u062A\u0634 \u0645\u06CC\u200C\u06A9\u0646\u0645.", ikb([back(id)]));
-    case "fix":
-      await setSession(env, u.id, "pm_fix", { id });
-      return void await send(env, u.id, "\u270F\uFE0F \u0645\u062A\u0646 \u0648/\u06CC\u0627 \u0639\u06A9\u0633 \u0648 \u0648\u06CC\u062F\u06CC\u0648\u06CC \u062C\u062F\u06CC\u062F \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u062A\u0627 \u062C\u0627\u06CC\u06AF\u0632\u06CC\u0646 \u0634\u0648\u062F.\n\u2022 \u0641\u0642\u0637 \u0645\u062A\u0646 \u2190 \u0631\u0633\u0627\u0646\u0647\u200C\u06CC \u0642\u0628\u0644\u06CC \u0645\u06CC\u200C\u0645\u0627\u0646\u062F\n\u2022 \u0641\u0642\u0637 \u0639\u06A9\u0633/\u0648\u06CC\u062F\u06CC\u0648 \u2190 \u0645\u062A\u0646 \u0642\u0628\u0644\u06CC \u0645\u06CC\u200C\u0645\u0627\u0646\u062F\n\u2022 \u0647\u0631 \u062F\u0648 (\u0639\u06A9\u0633/\u0648\u06CC\u062F\u06CC\u0648 \u0628\u0627 \u06A9\u067E\u0634\u0646) \u2190 \u0647\u0631 \u062F\u0648 \u0639\u0648\u0636 \u0645\u06CC\u200C\u0634\u0648\u062F", ikb([back(id)]));
-    case "media":
-      await setSession(env, u.id, "pm_media", { id });
-      return void await send(env, u.id, "\u{1F5BC} \u0639\u06A9\u0633 \u06CC\u0627 \u0648\u06CC\u062F\u06CC\u0648 \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F. \u067E\u06CC\u0627\u0645 \u0642\u0628\u0644\u06CC \u067E\u0627\u06A9 \u0645\u06CC\u200C\u0634\u0648\u062F \u0648 \u067E\u0633\u062A \u062C\u062F\u06CC\u062F (\u0628\u0627 \u0647\u0645\u0627\u0646 \u0645\u062A\u0646 \u0648 \u0627\u06CC\u0646 \u0631\u0633\u0627\u0646\u0647) \u0628\u0627\u0631\u06AF\u0630\u0627\u0631\u06CC \u0645\u06CC\u200C\u0634\u0648\u062F.", ikb([back(id)]));
-    case "del":
-      return void await send(env, u.id, `\u{1F5D1} \u067E\u0633\u062A #${id} \u062D\u0630\u0641 \u0634\u0648\u062F\u061F${p.status === "sent" ? "\n(\u0627\u0632 \u06AF\u0631\u0648\u0647 \u067E\u0627\u06A9 \u0645\u06CC\u200C\u0634\u0648\u062F\u061B \u062D\u0630\u0641 \u0627\u0632 \u0627\u06CC\u062A\u0627 \u0628\u0633\u062A\u06AF\u06CC \u0628\u0647 \u067E\u0634\u062A\u06CC\u0628\u0627\u0646\u06CC \u0627\u06CC\u062A\u0627\u06CC\u0627\u0631 \u062F\u0627\u0631\u062F)" : ""}`, ikb([[["\u2705 \u0628\u0644\u0647\u060C \u062D\u0630\u0641 \u06A9\u0646", `pm:dy:${id}`], ["\u21A9\uFE0F \u0628\u0631\u06AF\u0634\u062A", `pm:back:${id}`]]]));
-    case "dy": {
-      const r = await removePost(env, p, "deleted");
-      await setVerdict(env, id, u.id, "deleted");
-      return void await send(env, u.id, `\u{1F5D1} \u067E\u0633\u062A #${id} \u062D\u0630\u0641 \u0634\u062F.${r.eitaa === "removed" ? " (\u0627\u0632 \u0627\u06CC\u062A\u0627 \u0647\u0645 \u067E\u0627\u06A9 \u0634\u062F)" : ""}${await eitaaNote(env, p, r)}`);
-    }
-    case "force": {
-      const media = (await getPub(env, id))?.verdict === "held_media";
-      if (p.status !== "held") return void await send(env, u.id, "\u0627\u06CC\u0646 \u067E\u0633\u062A \u062F\u0631 \u062D\u0627\u0644 \u062D\u0627\u0636\u0631 \u0646\u06AF\u0647\u200C\u062F\u0627\u0634\u062A\u0647 \u0646\u0634\u062F\u0647 \u0627\u0633\u062A.");
-      if (media && p.kind === "file") {
-        if (!p.text.trim()) return void await send(env, u.id, "\u0627\u06CC\u0646 \u067E\u0633\u062A \u0645\u062A\u0646\u06CC \u0646\u062F\u0627\u0631\u062F\u061B \u0627\u0632 \xAB\u{1F5BC} \u0627\u0641\u0632\u0648\u062F\u0646 \u0639\u06A9\u0633/\u0648\u06CC\u062F\u06CC\u0648\xBB \u06CC\u0627 \xAB\u270F\uFE0F \u062A\u0635\u062D\u06CC\u062D\xBB \u0627\u0633\u062A\u0641\u0627\u062F\u0647 \u06A9\u0646\u06CC\u062F.");
-        await env.DB.prepare("UPDATE ea_posts SET kind='text', file_id='', src_url='', file_name='' WHERE id=?").bind(id).run();
-      }
-      await setVerdict(env, id, u.id, "forced");
-      await env.DB.prepare("UPDATE ea_posts SET status='pending', run_at=?, error='' WHERE id=?").bind(now(), id).run();
-      return void await send(env, u.id, `\u{1F680} \u067E\u0633\u062A #${id} ${media ? "\u0641\u0642\u0637 \u0628\u0627 \u0645\u062A\u0646 " : ""}\u062F\u0631 \u0635\u0641 \u0627\u0631\u0633\u0627\u0644 \u0642\u0631\u0627\u0631 \u06AF\u0631\u0641\u062A (\u062A\u0627 \u06CC\u06A9 \u062F\u0642\u06CC\u0642\u0647\u200C\u06CC \u062F\u06CC\u06AF\u0631).`);
-    }
-  }
-}
-async function onMessage(c, u, state, d, m) {
-  const { env } = c, id = Number(d.id);
-  const p = await getPost(env, id);
-  if (!p || p.user_id !== u.id || !ACTIVE.has(p.status)) {
-    await clearSession(env, u.id);
-    return void await send(env, u.id, "\u0627\u06CC\u0646 \u067E\u0633\u062A \u062F\u06CC\u06AF\u0631 \u0642\u0627\u0628\u0644 \u062A\u063A\u06CC\u06CC\u0631 \u0646\u06CC\u0633\u062A.");
-  }
-  const text = (m.text || "").trim();
-  if (state === "pm_err") {
-    if (!text) return void await send(env, u.id, "\u062E\u0637\u0627 \u0631\u0627 \u0628\u0627 \u0645\u062A\u0646 \u0628\u0646\u0648\u06CC\u0633\u06CC\u062F.", ikb([back(id)]));
-    await clearSession(env, u.id);
-    const wait = await send(env, u.id, "\u{1F50E} \u062F\u0631 \u062D\u0627\u0644 \u0628\u0631\u0631\u0633\u06CC \u062E\u0637\u0627\u2026");
-    const own = (await env.DB.prepare("SELECT footer FROM agent_jobs WHERE id=?").bind(p.job_id || 0).first())?.footer || "";
-    let lesson = "", fixed = null, why = "";
-    try {
-      const r2 = await learnFromError(env, u.id, p.text, text, p.kind === "file", own);
-      lesson = r2.rule;
-      fixed = r2.fixed;
-      why = r2.why;
-    } catch {
-      lesson = `\u0627\u0632 \u0627\u06CC\u0646 \u062E\u0637\u0627 \u062C\u0644\u0648\u06AF\u06CC\u0631\u06CC \u06A9\u0646: ${text.slice(0, 200)}`;
-      why = "\u0645\u062F\u0644 \u0647\u0648\u0634 \u0645\u0635\u0646\u0648\u0639\u06CC \u0627\u0644\u0627\u0646 \u062F\u0631 \u062F\u0633\u062A\u0631\u0633 \u0646\u0628\u0648\u062F\u061B \u062E\u0637\u0627 \u0641\u0642\u0637 \u062B\u0628\u062A \u0634\u062F.";
-    }
-    const learned = lesson ? await addLesson(env, u.id, lesson, text) : false;
-    if (learned) await lessonNote(env, u.id, `\u{1F4CC} <b>\u062F\u0631\u0633 \u062A\u0627\u0632\u0647</b> (\u0627\u0632 \u06AF\u0632\u0627\u0631\u0634 \u067E\u0633\u062A #${id})
-${esc(lesson)}`);
-    await report(env, u.id, `\u{1F6A9} <b>\u06AF\u0632\u0627\u0631\u0634 \u062E\u0637\u0627</b> \xB7 \u067E\u0633\u062A #${id}
-${esc(text.slice(0, 300))}${lesson ? `
-
-\u{1F9E0} \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u0645: ${esc(lesson)}` : ""}`);
-    if (fixed && (p.kind === "text" || fixed.length <= MAX_CAPTION)) {
-      const r2 = await replacePost(env, p, { text: fixed, keepJob: true });
-      const msg2 = `\u2705 \u062E\u0637\u0627 \u0627\u0635\u0644\u0627\u062D \u0634\u062F \u0648 \u067E\u0633\u062A \u062C\u062F\u06CC\u062F #${r2.id} \u0633\u0627\u062E\u062A\u0647 \u0634\u062F.
-\u0627\u0648\u0644 \u062F\u0631 \u06AF\u0631\u0648\u0647\u060C \u0628\u0639\u062F \u0627\u0632 \u0628\u0631\u0631\u0633\u06CC \u0646\u0627\u0638\u0631 \u062F\u0631 \u0627\u06CC\u062A\u0627 \u0645\u0646\u062A\u0634\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F (\u062A\u0627 \u06CC\u06A9 \u062F\u0642\u06CC\u0642\u0647).${lesson ? `
-
-\u{1F9E0} \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u0645: ${esc(lesson)}` : ""}${r2.note}`;
-      if (wait) await edit(env, u.id, wait, msg2);
-      else await send(env, u.id, msg2);
-      return;
-    }
-    const msg = `\u{1F615} \u0646\u062A\u0648\u0627\u0646\u0633\u062A\u0645 \u062E\u0648\u062F\u06A9\u0627\u0631 \u062F\u0631\u0633\u062A\u0634 \u06A9\u0646\u0645${why ? `: ${esc(why)}` : "."}
-\u067E\u0633\u062A \u062C\u062F\u06CC\u062F\u06CC \u0627\u0631\u0633\u0627\u0644 \u0646\u0634\u062F \u0648 \u067E\u0633\u062A \u0642\u0628\u0644\u06CC \u062F\u0633\u062A\u200C\u0646\u062E\u0648\u0631\u062F\u0647 \u0645\u0627\u0646\u062F.${lesson ? `
-
-\u{1F9E0} \u0648\u0644\u06CC \u06CC\u0627\u062F \u06AF\u0631\u0641\u062A\u0645: ${esc(lesson)}` : ""}
-
-\u062E\u0648\u062F\u062A\u0627\u0646 \u062A\u0635\u0645\u06CC\u0645 \u0628\u06AF\u06CC\u0631\u06CC\u062F \u{1F447}`;
-    const kb = ikb([[["\u270F\uFE0F \u062A\u0635\u062D\u06CC\u062D", `pm:fix:${id}`], ["\u{1F5BC} \u0627\u0641\u0632\u0648\u062F\u0646 \u0639\u06A9\u0633/\u0648\u06CC\u062F\u06CC\u0648", `pm:media:${id}`]], [["\u{1F5D1} \u062D\u0630\u0641 \u067E\u06CC\u0627\u0645", `pm:del:${id}`]]]);
-    if (wait) await edit(env, u.id, wait, msg, kb);
-    else await send(env, u.id, msg, kb);
-    return;
-  }
-  const r = extract(m);
-  if ("error" in r) return void await send(env, u.id, "\u274C " + r.error, ikb([back(id)]));
-  let patch;
-  if (state === "pm_fix") {
-    if (r.kind === "text") patch = { text: r.text };
-    else patch = { kind: "file", file_id: r.file_id, file_name: r.file_name, src_url: "", text: r.text || p.text };
-  } else {
-    if (r.kind === "text") return void await send(env, u.id, "\u06CC\u06A9 \u0639\u06A9\u0633 \u06CC\u0627 \u0648\u06CC\u062F\u06CC\u0648 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F (\u0646\u0647 \u0645\u062A\u0646).", ikb([back(id)]));
-    patch = { kind: "file", file_id: r.file_id, file_name: r.file_name, src_url: "", text: p.text };
-  }
-  const finalKind = patch.kind || p.kind, finalText = patch.text ?? p.text;
-  if (finalKind === "file" && finalText.length > MAX_CAPTION) return void await send(env, u.id, `\u274C \u0645\u062A\u0646 \u0647\u0645\u0631\u0627\u0647 \u0639\u06A9\u0633/\u0648\u06CC\u062F\u06CC\u0648 \u062D\u062F\u0627\u06A9\u062B\u0631 ${MAX_CAPTION} \u0646\u0648\u06CC\u0633\u0647 \u0627\u0633\u062A (\u0627\u0644\u0627\u0646 ${finalText.length}). \u0645\u062A\u0646 \u06A9\u0648\u062A\u0627\u0647\u200C\u062A\u0631\u06CC \u0628\u0641\u0631\u0633\u062A\u06CC\u062F.`, ikb([back(id)]));
-  if (!finalText.trim() && finalKind === "text") return void await send(env, u.id, "\u0645\u062A\u0646 \u062E\u0627\u0644\u06CC \u0627\u0633\u062A.", ikb([back(id)]));
-  await clearSession(env, u.id);
-  const res = await replacePost(env, p, patch);
-  await send(env, u.id, `\u267B\uFE0F \u067E\u06CC\u0627\u0645 \u0642\u0628\u0644\u06CC \u06A9\u0646\u0627\u0631 \u0631\u0641\u062A \u0648 \u067E\u0633\u062A \u062C\u062F\u06CC\u062F #${res.id} \u0633\u0627\u062E\u062A\u0647 \u0634\u062F.
-\u0627\u0648\u0644 \u062F\u0631 \u06AF\u0631\u0648\u0647\u060C \u0628\u0639\u062F \u0627\u0632 \u0628\u0631\u0631\u0633\u06CC \u0646\u0627\u0638\u0631 \u062F\u0631 \u0627\u06CC\u062A\u0627 \u0645\u0646\u062A\u0634\u0631 \u0645\u06CC\u200C\u0634\u0648\u062F (\u062A\u0627 \u06CC\u06A9 \u062F\u0642\u06CC\u0642\u0647).${res.note}`);
-}
-var GUIDE2 = "<b>\u{1F4D6} \u0627\u062A\u0635\u0627\u0644 \u06AF\u0631\u0648\u0647</b>\n\n1\uFE0F\u20E3 \u06CC\u06A9 \u06AF\u0631\u0648\u0647 \u062A\u0644\u06AF\u0631\u0627\u0645 \u0628\u0633\u0627\u0632\u06CC\u062F \u0648 \u062F\u0631 \u062A\u0646\u0638\u06CC\u0645\u0627\u062A \u0622\u0646 \xABTopics\xBB (\u062A\u0627\u067E\u06CC\u06A9) \u0631\u0627 \u0631\u0648\u0634\u0646 \u06A9\u0646\u06CC\u062F.\n2\uFE0F\u20E3 \u0647\u0645\u06CC\u0646 \u0631\u0628\u0627\u062A \u0631\u0627 \u0639\u0636\u0648 \u06AF\u0631\u0648\u0647 \u0648 <b>\u0627\u062F\u0645\u06CC\u0646</b> \u06A9\u0646\u06CC\u062F (\u062F\u0633\u062A\u0631\u0633\u06CC\u200C\u0647\u0627\u06CC \xAB\u0645\u062F\u06CC\u0631\u06CC\u062A \u062A\u0627\u067E\u06CC\u06A9\u200C\u0647\u0627\xBB \u0648 \xAB\u062D\u0630\u0641 \u067E\u06CC\u0627\u0645\u200C\u0647\u0627\xBB \u0644\u0627\u0632\u0645 \u0627\u0633\u062A).\n3\uFE0F\u20E3 \u062F\u0627\u062E\u0644 \u06AF\u0631\u0648\u0647 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F: <code>/eagroup</code>\n\n\u0631\u0628\u0627\u062A \u062A\u0627\u067E\u06CC\u06A9\u200C\u0647\u0627\u06CC \xAB\u0645\u0637\u0627\u0644\u0628\xBB\u060C \xAB\u06AF\u0632\u0627\u0631\u0634\u0627\u062A\xBB\u060C \xAB\u0686\u062A \u0628\u0627 \u0627\u06CC\u062C\u0646\u062A\xBB \u0648 \xAB\u0622\u0645\u0648\u062E\u062A\u0647\u200C\u0647\u0627\xBB \u0631\u0627 \u0645\u06CC\u200C\u0633\u0627\u0632\u062F.\n\n\u{1F6E1} <b>\u0631\u0628\u0627\u062A \u0646\u0627\u0638\u0631 (\u0627\u062E\u062A\u06CC\u0627\u0631\u06CC)</b>: \u062F\u0631 BotFather \u06CC\u06A9 \u0631\u0628\u0627\u062A \u062C\u062F\u06CC\u062F \u0628\u0633\u0627\u0632\u06CC\u062F\u060C \u062A\u0648\u06A9\u0646\u0634 \u0631\u0627 \u0627\u0632 \u062F\u06A9\u0645\u0647\u200C\u06CC \xAB\u062B\u0628\u062A \u0631\u0628\u0627\u062A \u0646\u0627\u0638\u0631\xBB \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u0648 \u0622\u0646 \u0631\u0627 \u0647\u0645 \u062F\u0631 \u06AF\u0631\u0648\u0647 \u0627\u062F\u0645\u06CC\u0646 \u06A9\u0646\u06CC\u062F\u061B \u06AF\u0632\u0627\u0631\u0634\u200C\u0647\u0627 \u0628\u0627 \u0646\u0627\u0645 \u0627\u0648 \u0645\u06CC\u200C\u0622\u06CC\u062F. (\u0628\u062F\u0648\u0646 \u0622\u0646\u060C \u0647\u0645\u06CC\u0646 \u0631\u0628\u0627\u062A \u06AF\u0632\u0627\u0631\u0634 \u0645\u06CC\u200C\u062F\u0647\u062F.)";
-async function home2(env, u) {
-  const g = await getGroup(env, u.id), sup = await supToken(env, u.id), supName = await kvGet(env, `supname:${u.id}`);
-  const n = (await env.DB.prepare("SELECT COUNT(*) n FROM ea_lessons WHERE user_id=?").bind(u.id).first())?.n || 0;
-  const t = `<b>\u{1F465} \u06AF\u0631\u0648\u0647 \u0648 \u0646\u0627\u0638\u0631</b>
-
-\u{1F465} \u06AF\u0631\u0648\u0647: ${g ? `\u2705 ${esc(g.title || g.chat)}${g.forum ? " \xB7 \u062A\u0627\u067E\u06CC\u06A9\u200C\u0647\u0627 " + (Object.keys(g.topics).length ? "\u2705" : "\u274C") : " \xB7 \u0628\u062F\u0648\u0646 \u062A\u0627\u067E\u06CC\u06A9"}` : "\u274C \u0645\u062A\u0635\u0644 \u0646\u06CC\u0633\u062A"}
-\u{1F6E1} \u0628\u0631\u0631\u0633\u06CC \u0646\u0627\u0638\u0631 \u067E\u06CC\u0634 \u0627\u0632 \u0627\u06CC\u062A\u0627: ${g ? g.review ? "\u0631\u0648\u0634\u0646" : "\u062E\u0627\u0645\u0648\u0634" : "\u2014"}
-\u{1F916} \u0631\u0628\u0627\u062A \u0646\u0627\u0638\u0631: ${sup ? "\u2705" + (supName ? " @" + esc(supName) : "") : "\u0646\u062F\u0627\u0631\u062F (\u0647\u0645\u06CC\u0646 \u0631\u0628\u0627\u062A \u06AF\u0632\u0627\u0631\u0634 \u0645\u06CC\u200C\u062F\u0647\u062F)"}
-\u{1F9E0} \u0622\u0645\u0648\u062E\u062A\u0647\u200C\u0647\u0627: ${n}`;
-  const rows = [[["\u{1F4D6} \u0631\u0627\u0647\u0646\u0645\u0627\u06CC \u0627\u062A\u0635\u0627\u0644 \u06AF\u0631\u0648\u0647", "gp:help"]]];
-  if (g) rows.push([[g.review ? "\u{1F6E1} \u062E\u0627\u0645\u0648\u0634\u200C\u06A9\u0631\u062F\u0646 \u0628\u0631\u0631\u0633\u06CC" : "\u{1F6E1} \u0631\u0648\u0634\u0646\u200C\u06A9\u0631\u062F\u0646 \u0628\u0631\u0631\u0633\u06CC", "gp:rev"], ["\u{1F50C} \u0642\u0637\u0639 \u06AF\u0631\u0648\u0647", "gp:off"]]);
-  rows.push([[sup ? "\u{1F511} \u062A\u063A\u06CC\u06CC\u0631 \u0631\u0628\u0627\u062A \u0646\u0627\u0638\u0631" : "\u{1F511} \u062B\u0628\u062A \u0631\u0628\u0627\u062A \u0646\u0627\u0638\u0631", "gp:sup"], ["\u{1F9E0} \u0622\u0645\u0648\u062E\u062A\u0647\u200C\u0647\u0627", "gp:les"]]);
-  if (sup) rows.push([["\u{1F5D1} \u062D\u0630\u0641 \u0631\u0628\u0627\u062A \u0646\u0627\u0638\u0631", "gp:supdel"]]);
-  await send(env, u.id, t, ikb(rows));
-}
-async function onGroupCallback(c, u, q, act, arg) {
-  const { env } = c;
-  await answer(env, q.id);
-  const g = await getGroup(env, u.id);
-  switch (act) {
-    case "help":
-      return void await send(env, u.id, GUIDE2);
-    case "rev":
-      if (g) {
-        g.review = !g.review;
-        await saveGroup(env, u.id, g);
-      }
-      return home2(env, u);
-    case "off":
-      await dropGroup(env, u.id);
-      return void await send(env, u.id, "\u{1F50C} \u06AF\u0631\u0648\u0647 \u0642\u0637\u0639 \u0634\u062F\u061B \u067E\u0633\u062A\u200C\u0647\u0627 \u0645\u0633\u062A\u0642\u06CC\u0645 \u0628\u0647 \u0627\u06CC\u062A\u0627 \u0645\u06CC\u200C\u0631\u0648\u0646\u062F.");
-    case "sup":
-      await setSession(env, u.id, "gp_sup", {});
-      return void await send(env, u.id, "\u{1F511} \u062A\u0648\u06A9\u0646 \u0631\u0628\u0627\u062A \u0646\u0627\u0638\u0631 \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F (\u0627\u0632 BotFather).\n\u{1F9F9} \u067E\u06CC\u0627\u0645 \u0634\u0645\u0627 \u0628\u0639\u062F \u0627\u0632 \u062E\u0648\u0627\u0646\u062F\u0646 \u067E\u0627\u06A9 \u0645\u06CC\u200C\u0634\u0648\u062F. \u0644\u063A\u0648: /cancel");
-    case "supdel":
-      await clearSupervisor(env, u.id);
-      return home2(env, u);
-    case "les": {
-      const rows = (await env.DB.prepare("SELECT id, rule FROM ea_lessons WHERE user_id=? ORDER BY id DESC LIMIT 15").bind(u.id).all()).results;
-      if (!rows.length) return void await send(env, u.id, "\u{1F9E0} \u0647\u0646\u0648\u0632 \u0686\u06CC\u0632\u06CC \u06CC\u0627\u062F \u0646\u06AF\u0631\u0641\u062A\u0647\u200C\u0627\u0645. \u0648\u0642\u062A\u06CC \xAB\u{1F6A9} \u06AF\u0632\u0627\u0631\u0634 \u062E\u0637\u0627\xBB \u0628\u0632\u0646\u06CC\u062F\u060C \u0627\u0632 \u0622\u0646 \u06CC\u06A9 \u0642\u0627\u0646\u0648\u0646 \u0645\u06CC\u200C\u0633\u0627\u0632\u0645.");
-      for (const r of rows) await send(env, u.id, `\u{1F9E0} ${esc(r.rule)}`, ikb([[["\u{1F5D1} \u0641\u0631\u0627\u0645\u0648\u0634 \u06A9\u0646", `gp:ld:${r.id}`]]]));
-      return;
-    }
-    case "ld":
-      await env.DB.prepare("DELETE FROM ea_lessons WHERE id=? AND user_id=?").bind(Number(arg), u.id).run();
-      if (q.message) await edit(env, u.id, q.message.message_id, "\u{1F5D1} \u0641\u0631\u0627\u0645\u0648\u0634 \u0634\u062F.");
-      return;
-  }
-}
-async function gotSupervisorToken(c, u, m, text) {
-  const { env } = c;
-  await del(env, u.id, m.message_id);
-  const token = text.trim();
-  if (!/^\d{6,}:[A-Za-z0-9_-]{20,}$/.test(token)) return void await send(env, u.id, "\u274C \u0642\u0627\u0644\u0628 \u062A\u0648\u06A9\u0646 \u062F\u0631\u0633\u062A \u0646\u06CC\u0633\u062A (\u0645\u062B\u0644 123456:ABC\u2026). \u062F\u0648\u0628\u0627\u0631\u0647 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F \u06CC\u0627 /cancel.");
-  const r = await setSupervisor(env, u.id, token);
-  if (!r.ok) return void await send(env, u.id, `\u274C \u062A\u0644\u06AF\u0631\u0627\u0645 \u062A\u0648\u06A9\u0646 \u0631\u0627 \u0646\u067E\u0630\u06CC\u0631\u0641\u062A: ${esc(r.error)}`);
-  await clearSession(env, u.id);
-  await send(env, u.id, `\u2705 \u0631\u0628\u0627\u062A \u0646\u0627\u0638\u0631 \u062B\u0628\u062A \u0634\u062F: @${esc(r.name)}${r.inGroup === false ? "\n\u26A0\uFE0F \u0647\u0646\u0648\u0632 \u062F\u0631 \u06AF\u0631\u0648\u0647 \u0646\u06CC\u0633\u062A\u061B \u0622\u0646 \u0631\u0627 \u0628\u0647 \u06AF\u0631\u0648\u0647 \u0627\u0636\u0627\u0641\u0647 \u0648 \u0627\u062F\u0645\u06CC\u0646 \u06A9\u0646\u06CC\u062F (\u062A\u0627 \u0622\u0646 \u0645\u0648\u0642\u0639 \u0647\u0645\u06CC\u0646 \u0631\u0628\u0627\u062A \u06AF\u0632\u0627\u0631\u0634 \u0645\u06CC\u200C\u062F\u0647\u062F)." : r.inGroup ? "\n\u2705 \u062F\u0631 \u06AF\u0631\u0648\u0647 \u0639\u0636\u0648 \u0627\u0633\u062A." : "\n\u0628\u0639\u062F \u0627\u0632 \u0627\u062A\u0635\u0627\u0644 \u06AF\u0631\u0648\u0647\u060C \u0622\u0646 \u0631\u0627 \u062F\u0631 \u06AF\u0631\u0648\u0647 \u0627\u062F\u0645\u06CC\u0646 \u06A9\u0646\u06CC\u062F."}`);
-}
-
 // eitaa-src/bot.ts
 var B = { NEW: "\u270D\uFE0F \u067E\u0633\u062A \u062C\u062F\u06CC\u062F", SCHED: "\u23F0 \u0632\u0645\u0627\u0646\u200C\u0628\u0646\u062F\u06CC\u200C\u0634\u062F\u0647\u200C\u0647\u0627", AGENT: "\u{1F916} \u0627\u06CC\u062C\u0646\u062A \u0647\u0648\u0634\u0645\u0646\u062F", CHAT: "\u{1F4AC} \u06AF\u0641\u062A\u06AF\u0648 \u0628\u0627 \u0627\u06CC\u062C\u0646\u062A", CHAN: "\u{1F4E3} \u06A9\u0627\u0646\u0627\u0644\u200C\u0647\u0627", APPS: "\u{1F50C} \u0628\u0631\u0646\u0627\u0645\u0647\u200C\u0647\u0627\u06CC \u0645\u062A\u0635\u0644", GROUP: "\u{1F465} \u06AF\u0631\u0648\u0647 \u0648 \u0646\u0627\u0638\u0631", ME: "\u{1F464} \u062D\u0633\u0627\u0628 \u0645\u0646", HELP: "\u{1F4A1} \u0631\u0627\u0647\u0646\u0645\u0627", ADMIN: "\u{1F6E0} \u0645\u062F\u06CC\u0631\u06CC\u062A", BACK: "\u{1F519} \u0628\u0627\u0632\u06AF\u0634\u062A \u0628\u0647 \u0647\u0648\u0634 \u0645\u0635\u0646\u0648\u0639\u06CC" };
 var MENU = new Set(Object.values(B));
@@ -2344,6 +3005,8 @@ async function onMessage2(c, m) {
       case "/cancel":
         await clearSession(env, uid);
         return void await send(env, uid, "\u0644\u063A\u0648 \u0634\u062F.", mainKb(admin));
+      case "/site":
+        return void await send(env, uid, await siteLink(env, uid));
       case "/help":
         return void await send(env, uid, HELP, mainKb(admin));
       default:
@@ -2366,8 +3029,12 @@ async function onMessage2(c, m) {
   switch (s.state) {
     case "token":
       return gotToken(c, user, m, text);
-    case "gp_sup":
-      return gotSupervisorToken(c, user, m, text);
+    case "gp_bot":
+      return gotBotToken(c, user, m, text, s.data.role === "asst" ? "asst" : "sup");
+    case "gp_led":
+      return gotLesson(c, user, s.data, text);
+    case "as_ans":
+      return gotAnswer(c, user, s.data, text);
     case "pm_err":
     case "pm_fix":
     case "pm_media":
@@ -2638,84 +3305,85 @@ async function onCallback3(c, q) {
   const { env } = c, uid = q.from.id, admin = isAdmin(env, uid), mid = q.message?.message_id;
   const user = await touchUser(env, uid, q.from.first_name || "", q.from.username || "");
   if (user.banned && !admin || !hasAccess(user, admin, env)) return answer(env, q.id, "\u062F\u0633\u062A\u0631\u0633\u06CC \u0646\u062F\u0627\u0631\u06CC\u062F.", true);
-  const [kind, act, arg] = (q.data || "").split(":");
+  const [kind, act2, arg] = (q.data || "").split(":");
   const s = await getSession(env, uid);
   if (kind === "tk") {
     await answer(env, q.id);
-    if (act === "set") {
+    if (act2 === "set") {
       await setSession(env, uid, "token", {});
       return void await send(env, uid, "\u{1F511} \u062A\u0648\u06A9\u0646 \u0627\u06CC\u062A\u0627\u06CC\u0627\u0631 \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F\n\u{1F9F9} \u067E\u06CC\u0627\u0645 \u0634\u0645\u0627 \u0628\u0639\u062F \u0627\u0632 \u062E\u0648\u0627\u0646\u062F\u0646 \u067E\u0627\u06A9 \u0645\u06CC\u200C\u0634\u0648\u062F. \u0644\u063A\u0648: /cancel");
     }
-    if (act === "del") {
+    if (act2 === "del") {
       await env.DB.prepare("UPDATE ea_users SET eitaa_token_enc='', eitaa_account='' WHERE id=?").bind(uid).run();
       return void await send(env, uid, "\u{1F5D1} \u062A\u0648\u06A9\u0646 \u062D\u0630\u0641 \u0634\u062F.");
     }
   }
-  if (kind === "pm") return onCallback2(c, user, q, act, arg);
-  if (kind === "gp") return onGroupCallback(c, user, q, act, arg);
-  if (kind === "ag") return onCallback(c, user, admin, q, act, arg, s);
+  if (kind === "pm") return onCallback2(c, user, q, act2, arg);
+  if (kind === "as") return onAskCallback(c, user, q, act2, arg);
+  if (kind === "gp") return onGroupCallback(c, user, q, act2, arg);
+  if (kind === "ag") return onCallback(c, user, admin, q, act2, arg, s);
   if (kind === "ch") {
     await answer(env, q.id);
-    if (act === "add") {
+    if (act2 === "add") {
       await setSession(env, uid, "chan_id", {});
       return void await send(env, uid, "\u0622\u06CC\u062F\u06CC \u06CC\u0627 \u0644\u06CC\u0646\u06A9 \u06A9\u0627\u0646\u0627\u0644 \u0627\u06CC\u062A\u0627 \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F. \u0645\u062B\u0627\u0644: <code>@mychannel</code> \u06CC\u0627 <code>https://eitaa.com/mychannel</code>");
     }
     const ch = await getChannel(env, Number(arg));
     if (!ch || ch.user_id !== uid) return;
-    if (act === "v") return void await send(env, uid, `<b>${esc(ch.title)}</b>
+    if (act2 === "v") return void await send(env, uid, `<b>${esc(ch.title)}</b>
 <code>${esc(ch.chat_id)}</code>`, ikb([[["\u270F\uFE0F \u062A\u063A\u06CC\u06CC\u0631 \u0646\u0627\u0645", `ch:rn:${ch.id}`], ["\u{1F5D1} \u062D\u0630\u0641", `ch:del:${ch.id}`]]]));
-    if (act === "rn") {
+    if (act2 === "rn") {
       await setSession(env, uid, "chan_rename", { channel_id: ch.id });
       return void await send(env, uid, "\u0646\u0627\u0645 \u062C\u062F\u06CC\u062F \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F:");
     }
-    if (act === "del") return void await send(env, uid, `\xAB${esc(ch.title)}\xBB \u062D\u0630\u0641 \u0634\u0648\u062F\u061F (\u067E\u0633\u062A\u200C\u0647\u0627\u06CC \u0632\u0645\u0627\u0646\u200C\u0628\u0646\u062F\u06CC\u200C\u0634\u062F\u0647 \u0648 \u0627\u06CC\u062C\u0646\u062A\u200C\u0647\u0627\u06CC \u0622\u0646 \u0647\u0645 \u062D\u0630\u0641 \u0645\u06CC\u200C\u0634\u0648\u0646\u062F)`, ikb([[["\u2705 \u0628\u0644\u0647\u060C \u062D\u0630\u0641", `ch:dy:${ch.id}`], ["\u062E\u06CC\u0631", "ch:no:0"]]]));
-    if (act === "dy") {
+    if (act2 === "del") return void await send(env, uid, `\xAB${esc(ch.title)}\xBB \u062D\u0630\u0641 \u0634\u0648\u062F\u061F (\u067E\u0633\u062A\u200C\u0647\u0627\u06CC \u0632\u0645\u0627\u0646\u200C\u0628\u0646\u062F\u06CC\u200C\u0634\u062F\u0647 \u0648 \u0627\u06CC\u062C\u0646\u062A\u200C\u0647\u0627\u06CC \u0622\u0646 \u0647\u0645 \u062D\u0630\u0641 \u0645\u06CC\u200C\u0634\u0648\u0646\u062F)`, ikb([[["\u2705 \u0628\u0644\u0647\u060C \u062D\u0630\u0641", `ch:dy:${ch.id}`], ["\u062E\u06CC\u0631", "ch:no:0"]]]));
+    if (act2 === "dy") {
       await env.DB.batch([env.DB.prepare("UPDATE ea_posts SET status='canceled' WHERE channel_id=? AND status IN ('pending','draft')").bind(ch.id), env.DB.prepare("DELETE FROM agent_jobs WHERE channel_id=?").bind(ch.id), env.DB.prepare("DELETE FROM ea_channels WHERE id=?").bind(ch.id)]);
       return void await send(env, uid, "\u{1F5D1} \u062D\u0630\u0641 \u0634\u062F.");
     }
     return;
   }
-  if (kind === "sp" && act === "del") {
+  if (kind === "sp" && act2 === "del") {
     const r = await env.DB.prepare("UPDATE ea_posts SET status='canceled' WHERE id=? AND user_id=? AND status='pending'").bind(Number(arg), uid).run();
     await answer(env, q.id, r.meta.changes ? "\u0644\u063A\u0648 \u0634\u062F." : "\u0642\u0627\u0628\u0644 \u0644\u063A\u0648 \u0646\u06CC\u0633\u062A.");
     if (mid && r.meta.changes) await edit(env, uid, mid, `\u{1F5D1} \u067E\u0633\u062A #${arg} \u0644\u063A\u0648 \u0634\u062F.`);
     return;
   }
   if (kind === "np") {
-    if (act === "c") {
+    if (act2 === "c") {
       await answer(env, q.id);
       const ch = await getChannel(env, Number(arg));
       return ch && ch.user_id === uid ? askContent(env, uid, ch) : void 0;
     }
-    if (act === "x") {
+    if (act2 === "x") {
       await clearSession(env, uid);
       await answer(env, q.id, "\u0644\u063A\u0648 \u0634\u062F.");
       return void (mid && await edit(env, uid, mid, "\u0644\u063A\u0648 \u0634\u062F."));
     }
     if (s.state !== "np_menu" && s.state !== "np_when") return answer(env, q.id, "\u0627\u06CC\u0646 \u067E\u06CC\u0634\u200C\u0646\u0648\u06CC\u0633 \u0645\u0646\u0642\u0636\u06CC \u0634\u062F\u0647\u061B \u062F\u0648\u0628\u0627\u0631\u0647 \xAB\u067E\u0633\u062A \u062C\u062F\u06CC\u062F\xBB \u0628\u0632\u0646\u06CC\u062F.", true);
     const d = s.data;
-    if (act === "silent" || act === "pin") {
-      d[act] = d[act] ? 0 : 1;
+    if (act2 === "silent" || act2 === "pin") {
+      d[act2] = d[act2] ? 0 : 1;
       await setSession(env, uid, "np_menu", d);
       await answer(env, q.id);
       return mid ? showMenu(env, uid, d, mid) : void 0;
     }
-    if (act === "title") {
+    if (act2 === "title") {
       await answer(env, q.id);
       await setSession(env, uid, "np_title", d);
       return void await send(env, uid, "\u0639\u0646\u0648\u0627\u0646 \u067E\u0633\u062A \u0631\u0627 \u0628\u0641\u0631\u0633\u062A\u06CC\u062F:");
     }
-    if (act === "view") {
+    if (act2 === "view") {
       await answer(env, q.id);
       await setSession(env, uid, "np_view", d);
       return void await send(env, uid, "\u067E\u0633 \u0627\u0632 \u0686\u0646\u062F \u0628\u0627\u0632\u062F\u06CC\u062F \u067E\u0633\u062A \u062D\u0630\u0641 \u0634\u0648\u062F\u061F \u0639\u062F\u062F \u0628\u0641\u0631\u0633\u062A\u06CC\u062F (\u06F0 = \u062E\u0627\u0645\u0648\u0634):");
     }
-    if (act === "sch") {
+    if (act2 === "sch") {
       await answer(env, q.id);
       await setSession(env, uid, "np_when", d);
       return void await send(env, uid, "\u23F0 \u0632\u0645\u0627\u0646 \u0627\u0646\u062A\u0634\u0627\u0631 (\u0648\u0642\u062A \u062A\u0647\u0631\u0627\u0646):\n<code>18:30</code> \xB7 <code>\u0641\u0631\u062F\u0627 09:00</code> \xB7 <code>+45</code> \xB7 <code>1405/07/20 18:30</code>\n\u0644\u063A\u0648: /cancel");
     }
-    if (act === "now") {
+    if (act2 === "now") {
       const id = await createPost(env, uid, d, now());
       await clearSession(env, uid);
       await answer(env, q.id, "\u062F\u0631 \u062D\u0627\u0644 \u0627\u0631\u0633\u0627\u0644\u2026");
@@ -2744,7 +3412,11 @@ var SCHEMA = [
   "CREATE TABLE IF NOT EXISTS ea_kv (\n  k TEXT PRIMARY KEY,\n  v TEXT NOT NULL DEFAULT ''\n)",
   "CREATE TABLE IF NOT EXISTS ea_pubs (\n  post_id INTEGER PRIMARY KEY,\n  user_id INTEGER NOT NULL,\n  grp_chat TEXT NOT NULL DEFAULT '',\n  grp_msg INTEGER NOT NULL DEFAULT 0,\n  verdict TEXT NOT NULL DEFAULT '',\n  note TEXT NOT NULL DEFAULT '',\n  updated_at INTEGER NOT NULL DEFAULT 0\n)",
   "CREATE TABLE IF NOT EXISTS ea_lessons (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  user_id INTEGER NOT NULL,\n  rule TEXT NOT NULL,\n  source TEXT NOT NULL DEFAULT '',\n  created_at INTEGER NOT NULL\n)",
-  "CREATE INDEX IF NOT EXISTS idx_lessons_user ON ea_lessons(user_id)"
+  "CREATE INDEX IF NOT EXISTS idx_lessons_user ON ea_lessons(user_id)",
+  "CREATE TABLE IF NOT EXISTS ea_events (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  user_id INTEGER NOT NULL,\n  kind TEXT NOT NULL,\n  payload TEXT NOT NULL DEFAULT '',\n  status TEXT NOT NULL DEFAULT 'new',\n  created_at INTEGER NOT NULL\n)",
+  "CREATE TABLE IF NOT EXISTS ea_council (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  user_id INTEGER NOT NULL,\n  role TEXT NOT NULL,\n  text TEXT NOT NULL,\n  created_at INTEGER NOT NULL\n)",
+  "CREATE TABLE IF NOT EXISTS ea_asks (\n  id INTEGER PRIMARY KEY AUTOINCREMENT,\n  user_id INTEGER NOT NULL,\n  role TEXT NOT NULL DEFAULT 'sup',\n  question TEXT NOT NULL,\n  answer TEXT NOT NULL DEFAULT '',\n  status TEXT NOT NULL DEFAULT 'open',\n  created_at INTEGER NOT NULL\n)",
+  "CREATE INDEX IF NOT EXISTS idx_council_user ON ea_council(user_id)"
 ];
 
 // eitaa-src/entry.ts
@@ -2767,6 +3439,15 @@ async function handle(host, access, update, wait) {
 }
 async function cron(host) {
   await tick(adapt(host, true));
+  try {
+    await processCouncil(adapt(host, true));
+  } catch (e) {
+    console.error("council tick failed", e.message);
+  }
+}
+var webPage = () => appPage();
+async function webApi(host, request, path) {
+  return api(adapt(host, true), request, path);
 }
 async function handleGroup(host, update, wait, hasAccess2) {
   const m = update.message;
@@ -2791,17 +3472,21 @@ async function handleGroup(host, update, wait, hasAccess2) {
   const owner = await groupOwner(env, m.chat.id);
   if (owner === null) return false;
   const g = await getGroup(env, owner);
-  if (!g || m.from.id !== owner || !text || text.startsWith("/") || !g.topics.chat || m.message_thread_id !== g.topics.chat) return true;
+  if (!g || m.from.id !== owner || !text || text.startsWith("/") || !(g.topics.chat || g.topics.council) || ![g.topics.chat, g.topics.council].includes(m.message_thread_id)) return true;
   const last = Number(await kvGet(env, `gmlast:${m.chat.id}`) || 0);
   if (m.message_id <= last) return true;
   await kvSet(env, `gmlast:${m.chat.id}`, String(m.message_id));
+  if (g.topics.council && m.message_thread_id === g.topics.council) {
+    await ownerSpoke(env, owner, text);
+    return true;
+  }
   const user = await touchUser(env, owner, m.from.first_name || "", m.from.username || "");
   if (!user.eitaa_token_enc || !(await userChannels(env, owner)).length) {
     await say("\u0627\u0628\u062A\u062F\u0627 \u062F\u0631 \u0631\u0628\u0627\u062A \u062A\u0648\u06A9\u0646 \u0627\u06CC\u062A\u0627\u06CC\u0627\u0631 \u0631\u0627 \u062B\u0628\u062A \u0648 \u06CC\u06A9 \u06A9\u0627\u0646\u0627\u0644 \u0627\u0636\u0627\u0641\u0647 \u06A9\u0646\u06CC\u062F.");
     return true;
   }
   const before = await getSession(env, owner);
-  const renv = { ...env, EA_REDIRECT: { from: owner, chat: m.chat.id, thread: g.topics.chat } };
+  const renv = { ...env, EA_REDIRECT: { from: owner, chat: m.chat.id, thread: m.message_thread_id || 0 } };
   try {
     await turn({ env: renv, wait }, user, m, text, {});
   } finally {
@@ -2820,5 +3505,7 @@ export {
   handleGroup,
   parseMessages,
   resolvePost,
-  wantedCounts
+  wantedCounts,
+  webApi,
+  webPage
 };

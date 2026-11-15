@@ -10,8 +10,10 @@ export interface Env {
   EITAA_WEB_BASE?: string;  // default https://eitaa.com
   EA_ACCESS?: boolean;       // set by the host bot: owner or paid plan
   EA_MODEL?: string;         // preferred Workers AI model (host bot MODEL)
+  WORKER_URL?: string;       // public address of this Worker (used for the personal website link)
   SUPERVISOR_TOKEN?: string; // optional: token of the supervisor (ناظر) bot; can also be set from the Eitaa menu
   EA_REDIRECT?: { from: number; chat: number; thread: number }; // live chat inside a group topic: replies to `from` go to the topic
+  ASSISTANT_TOKEN?: string;  // optional: token of the assistant (دستیار) bot
   LLM_TEST_BASE?: string;    // automated tests only
   LLM_TEST_KEY?: string;
 }

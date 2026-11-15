@@ -844,6 +844,7 @@ async function eitaaRoute(env, update, wait) {
     return true;
   }
   if (!(await eitaaMode(env, uid))) return false;
+  if (ci && ['panel', 'diag', 'stats', 'grant', 'ban', 'unban'].includes(ci.cmd) && isOwner(env, uid)) return false; // دستورهای مدیریت ربات اصلی در حالت ایتا هم کار کنند
   if (text === EA_BACK || (ci && ci.cmd === 'ai')) {
     await setEitaaMode(env, uid, false);
     await tg(env, 'sendMessage', { chat_id: msg.chat.id, text: 'به حالت هوش مصنوعی برگشتید 🤖 هر چه می‌خواهید بپرسید. (بخش ایتا: /eitaa)', reply_markup: { remove_keyboard: true } });
@@ -1539,6 +1540,9 @@ async function route(request, env, ctx) {
     await ensureSchema(env);
     return json(await ensureWebhook(env, url.origin));
   }
+
+  if (p === '/app') { await ensureSchema(env); return ea.webPage(); }
+  if (p.startsWith('/app/api/')) return ea.webApi(env, request, p.slice('/app/api/'.length));
 
   if (p === '/admin') return html(ADMIN_HTML.replace('__BRAND__', esc(env.BRAND_NAME || '')));
   if (p.startsWith('/admin/api/')) return adminApi(request, env, p.slice('/admin/api/'.length), url);

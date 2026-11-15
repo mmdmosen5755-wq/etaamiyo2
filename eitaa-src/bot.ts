@@ -5,6 +5,7 @@ import { Env, adminIds } from "./env";
 import * as agentUi from "./agentui";
 import * as chat from "./chat";
 import * as manage from "./manage";
+import { siteLink } from "./web";
 import { llmChain } from "./providers";
 import { cleanText, fetchChannel } from "./source";
 import { deliver } from "./scheduler";
@@ -47,6 +48,7 @@ async function onMessage(c: Ctx, m: TgMessage): Promise<void> {
         await clearSession(env, uid); return void (await tg.send(env, uid, welcome(env, user, admin), mainKb(admin)));
       }
       case "/cancel": await clearSession(env, uid); return void (await tg.send(env, uid, "لغو شد.", mainKb(admin)));
+      case "/site": return void (await tg.send(env, uid, await siteLink(env, uid)));
       case "/help": return void (await tg.send(env, uid, HELP, mainKb(admin)));
       default: if (admin) { const r = await adminCmd(env, cmd.toLowerCase(), args); if (r) return void (await tg.send(env, uid, r)); }
     }
@@ -60,7 +62,9 @@ async function onMessage(c: Ctx, m: TgMessage): Promise<void> {
   if (!hasAccess(user, admin, env) && s.state) { await clearSession(env, uid); return void (await tg.send(env, uid, NO_ACCESS)); }
   switch (s.state) {
     case "token": return gotToken(c, user, m, text);
-    case "gp_sup": return manage.gotSupervisorToken(c, user, m, text);
+    case "gp_bot": return manage.gotBotToken(c, user, m, text, s.data.role === "asst" ? "asst" : "sup");
+    case "gp_led": return manage.gotLesson(c, user, s.data, text);
+    case "as_ans": return manage.gotAnswer(c, user, s.data, text);
     case "pm_err": case "pm_fix": case "pm_media": return manage.onMessage(c, user, s.state, s.data, m);
     case "chan_id": return gotChanId(c, user, text);
     case "chan_title": return gotChanTitle(c, user, s.data, text);
@@ -298,6 +302,7 @@ async function onCallback(c: Ctx, q: TgCallback): Promise<void> {
     if (act === "del") { await env.DB.prepare("UPDATE ea_users SET eitaa_token_enc='', eitaa_account='' WHERE id=?").bind(uid).run(); return void (await tg.send(env, uid, "🗑 توکن حذف شد.")); }
   }
   if (kind === "pm") return manage.onCallback(c, user, q, act, arg);
+  if (kind === "as") return manage.onAskCallback(c, user, q, act, arg);
   if (kind === "gp") return manage.onGroupCallback(c, user, q, act, arg);
   if (kind === "ag") return agentUi.onCallback(c, user, admin, q, act, arg, s);
   if (kind === "ch") {

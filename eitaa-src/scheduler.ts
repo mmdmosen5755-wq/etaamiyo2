@@ -6,6 +6,7 @@ import * as eitaa from "./eitaa";
 import { Env, eitaaWeb } from "./env";
 import { getGroup, getPub, markGroup, postToGroup, removeFromGroup, report, setVerdict } from "./group";
 import { reviewText } from "./review";
+import { enqueue } from "./council";
 import { extFor, fetchBytes } from "./source";
 import * as tg from "./tg";
 import { Btn, ikb } from "./tg";
@@ -82,6 +83,7 @@ async function hold(env: Env, p: PostRow, why: string[], kind: "review" | "media
   const rows: Btn[][] = [[["✏️ تصحیح", `pm:fix:${p.id}`], ["🖼 افزودن عکس/ویدیو", `pm:media:${p.id}`]], [[kind === "media" ? "📝 ارسال فقط متن" : "🚀 ارسال با همین وضعیت", `pm:force:${p.id}`], ["🗑 حذف", `pm:del:${p.id}`]]];
   await report(env, p.user_id, msg, undefined, false);
   await tg.send(env, p.user_id, msg, ikb(rows));
+  if (kind === "review") await enqueue(env, p.user_id, "held", { id: p.id, problems: why }).catch(() => null);
 }
 
 /** The supervised path: the post goes to the group first, the supervisor reviews it, and only then it is allowed to reach Eitaa. */
@@ -103,6 +105,7 @@ async function gate(env: Env, p: PostRow, ch: ChannelRow, file: { bytes: Uint8Ar
     await removeFromGroup(env, p.id);
     try { await postToGroup(env, p.user_id, p.id, q, file); } catch { /* group copy is informational */ }
     await setVerdict(env, p.id, p.user_id, "fixed", r.problems.join(" · "));
+    await enqueue(env, p.user_id, "fixed", { id: p.id, problems: r.problems }).catch(() => null);
     await report(env, p.user_id, `🛡 <b>ناظر</b> · پست #${p.id} ایراد داشت و اصلاح شد (نسخه‌ی قبلی از گروه پاک شد؛ نسخه‌ی درست اول در گروه، بعد در ایتا):\n${r.problems.map((x) => "• " + esc(x)).join("\n") || "• اصلاح جزئی"}`);
     return q;
   }

@@ -4,8 +4,10 @@ import { dec } from "./crypto";
 import { PostRow, UserRow, clearSession, getUser, now, setSession } from "./db";
 import * as eitaa from "./eitaa";
 import { Env } from "./env";
-import { clearSupervisor, dropGroup, getGroup, getPub, kvGet, lessonNote, markGroup, removeFromGroup, report, saveGroup, sendCopy, setSupervisor, setVerdict, supToken } from "./group";
+import { Role, clearRoleBot, dropGroup, getGroup, getPub, kvGet, lessonNote, removeFromGroup, report, roleToken, saveGroup, sendCopy, setRoleBot, setVerdict } from "./group";
 import { addLesson, learnFromError } from "./review";
+import { answerAsk, enqueue } from "./council";
+import { siteLink } from "./web";
 import { loadMedia } from "./scheduler";
 import * as tg from "./tg";
 import { Btn, TgCallback, TgMessage, ikb } from "./tg";
@@ -125,6 +127,7 @@ export async function onMessage(c: Ctx, u: UserRow, state: string, d: Record<str
     } catch { lesson = `از این خطا جلوگیری کن: ${text.slice(0, 200)}`; why = "مدل هوش مصنوعی الان در دسترس نبود؛ خطا فقط ثبت شد."; }
     const learned = lesson ? await addLesson(env, u.id, lesson, text) : false;
     if (learned) await lessonNote(env, u.id, `📌 <b>درس تازه</b> (از گزارش پست #${id})\n${esc(lesson)}`);
+    await enqueue(env, u.id, "reported_error", { id, error: text.slice(0, 300), lesson, fixed: !!fixed }).catch(() => null);
     await report(env, u.id, `🚩 <b>گزارش خطا</b> · پست #${id}\n${esc(text.slice(0, 300))}${lesson ? `\n\n🧠 یاد گرفتم: ${esc(lesson)}` : ""}`);
     if (fixed && (p.kind === "text" || fixed.length <= MAX_CAPTION)) {
       const r = await replacePost(env, p, { text: fixed, keepJob: true });
@@ -156,46 +159,86 @@ export async function onMessage(c: Ctx, u: UserRow, state: string, d: Record<str
   await tg.send(env, u.id, `♻️ پیام قبلی کنار رفت و پست جدید #${res.id} ساخته شد.\nاول در گروه، بعد از بررسی ناظر در ایتا منتشر می‌شود (تا یک دقیقه).${res.note}`);
 }
 
-// ------------------------------------------------------------------ group + supervisor settings screen
-const GUIDE = "<b>📖 اتصال گروه</b>\n\n1️⃣ یک گروه تلگرام بسازید و در تنظیمات آن «Topics» (تاپیک) را روشن کنید.\n2️⃣ همین ربات را عضو گروه و <b>ادمین</b> کنید (دسترسی‌های «مدیریت تاپیک‌ها» و «حذف پیام‌ها» لازم است).\n3️⃣ داخل گروه بفرستید: <code>/eagroup</code>\n\nربات تاپیک‌های «مطالب»، «گزارشات»، «چت با ایجنت» و «آموخته‌ها» را می‌سازد.\n\n🛡 <b>ربات ناظر (اختیاری)</b>: در BotFather یک ربات جدید بسازید، توکنش را از دکمه‌ی «ثبت ربات ناظر» بفرستید و آن را هم در گروه ادمین کنید؛ گزارش‌ها با نام او می‌آید. (بدون آن، همین ربات گزارش می‌دهد.)";
+// ------------------------------------------------------------------ group + supervisor + assistant settings screen
+const GUIDE = "<b>📖 اتصال گروه</b>\n\n1️⃣ یک گروه تلگرام بسازید و در تنظیمات آن «Topics» (تاپیک) را روشن کنید.\n2️⃣ همین ربات را عضو گروه و <b>ادمین</b> کنید («مدیریت تاپیک‌ها» و «حذف پیام‌ها» لازم است).\n3️⃣ داخل گروه بفرستید: <code>/eagroup</code>\n\nتاپیک‌های «مطالب»، «گزارشات»، «چت با ایجنت»، «آموخته‌ها» و «شورا» ساخته می‌شود.\n\n🛡 <b>ربات ناظر</b> و 🧭 <b>ربات دستیار</b> (اختیاری): در BotFather دو ربات جدید بسازید، توکن هرکدام را از دکمه‌ی «ثبت …» بدهید و هر دو را در گروه ادمین کنید. در تاپیک «شورا» با نام خودشان با هم گفتگو می‌کنند. (بدون آن‌ها، همین ربات با برچسب نقششان می‌نویسد.)\n\n🌐 <b>سایت شخصی</b>: دکمه‌ی «🌐 سایت من» یک لینک مخصوص شما می‌دهد؛ همه‌ی کارها از آنجا هم شدنی است.";
+const ROLES = { sup: { fa: "ناظر", icon: "🛡" }, asst: { fa: "دستیار", icon: "🧭" } } as const;
 
 export async function home(env: Env, u: UserRow): Promise<void> {
-  const g = await getGroup(env, u.id), sup = await supToken(env, u.id), supName = await kvGet(env, `supname:${u.id}`);
+  const g = await getGroup(env, u.id);
+  const bot = async (r: Role) => ({ has: !!(await roleToken(env, u.id, r)), name: await kvGet(env, `${r}name:${u.id}`) });
+  const sup = await bot("sup"), asst = await bot("asst");
   const n = (await env.DB.prepare("SELECT COUNT(*) n FROM ea_lessons WHERE user_id=?").bind(u.id).first<{ n: number }>())?.n || 0;
-  const t = `<b>👥 گروه و ناظر</b>\n\n👥 گروه: ${g ? `✅ ${esc(g.title || g.chat)}${g.forum ? " · تاپیک‌ها " + (Object.keys(g.topics).length ? "✅" : "❌") : " · بدون تاپیک"}` : "❌ متصل نیست"}\n` +
-    `🛡 بررسی ناظر پیش از ایتا: ${g ? (g.review ? "روشن" : "خاموش") : "—"}\n🤖 ربات ناظر: ${sup ? "✅" + (supName ? " @" + esc(supName) : "") : "ندارد (همین ربات گزارش می‌دهد)"}\n🧠 آموخته‌ها: ${n}`;
-  const rows: Btn[][] = [[["📖 راهنمای اتصال گروه", "gp:help"]]];
+  const asks = (await env.DB.prepare("SELECT COUNT(*) n FROM ea_asks WHERE user_id=? AND status='open'").bind(u.id).first<{ n: number }>())?.n || 0;
+  const line = (r: Role, b: { has: boolean; name: string | null }) => `${ROLES[r].icon} ${ROLES[r].fa}: ${b.has ? "✅" + (b.name ? " @" + esc(b.name) : "") : "ربات جدا ندارد (همین ربات می‌نویسد)"}`;
+  const t = `<b>👥 گروه، ناظر و دستیار</b>\n\n👥 گروه: ${g ? `✅ ${esc(g.title || g.chat)}${g.forum ? " · تاپیک‌ها " + (g.topics.council ? "✅" : "⚠️ برای تاپیک «شورا» دوباره /eagroup بفرستید") : " · بدون تاپیک"}` : "❌ متصل نیست"}\n` +
+    `🛡 بررسی ناظر پیش از ایتا: ${g ? (g.review ? "روشن" : "خاموش") : "—"}\n${line("sup", sup)}\n${line("asst", asst)}\n🧠 آموخته‌ها: ${n}${asks ? `\n❓ سؤال بی‌پاسخ: ${asks}` : ""}`;
+  const rows: Btn[][] = [[["🌐 سایت من", "gp:site"], ["📖 راهنما", "gp:help"]], [["🧠 آموخته‌ها", "gp:les"], ["🤝 جلسه‌ی شورا", "gp:run"]]];
   if (g) rows.push([[g.review ? "🛡 خاموش‌کردن بررسی" : "🛡 روشن‌کردن بررسی", "gp:rev"], ["🔌 قطع گروه", "gp:off"]]);
-  rows.push([[sup ? "🔑 تغییر ربات ناظر" : "🔑 ثبت ربات ناظر", "gp:sup"], ["🧠 آموخته‌ها", "gp:les"]]);
-  if (sup) rows.push([["🗑 حذف ربات ناظر", "gp:supdel"]]);
+  rows.push([[sup.has ? "🔑 تغییر ناظر" : "🔑 ثبت ربات ناظر", "gp:sup"], [asst.has ? "🔑 تغییر دستیار" : "🔑 ثبت ربات دستیار", "gp:asst"]]);
+  const del: Btn[] = []; if (sup.has) del.push(["🗑 حذف ناظر", "gp:supdel"]); if (asst.has) del.push(["🗑 حذف دستیار", "gp:asstdel"]); if (del.length) rows.push(del);
   await tg.send(env, u.id, t, ikb(rows));
 }
+const lessonKb = (id: number) => ikb([[["✏️ ویرایش", `gp:le:${id}`], ["🗑 فراموش کن", `gp:ld:${id}`]]]);
+
 export async function onGroupCallback(c: Ctx, u: UserRow, q: TgCallback, act: string, arg: string): Promise<void> {
   const { env } = c;
   await tg.answer(env, q.id);
   const g = await getGroup(env, u.id);
   switch (act) {
     case "help": return void (await tg.send(env, u.id, GUIDE));
+    case "site": return void (await tg.send(env, u.id, await siteLink(env, u.id)));
+    case "run": await enqueue(env, u.id, "manual", {}); return void (await tg.send(env, u.id, "🤝 جلسه‌ی شورا درخواست شد؛ تا یک دقیقه‌ی دیگر در تاپیک «شورا» شروع می‌شود."));
     case "rev": if (g) { g.review = !g.review; await saveGroup(env, u.id, g); } return home(env, u);
     case "off": await dropGroup(env, u.id); return void (await tg.send(env, u.id, "🔌 گروه قطع شد؛ پست‌ها مستقیم به ایتا می‌روند."));
-    case "sup": await setSession(env, u.id, "gp_sup", {}); return void (await tg.send(env, u.id, "🔑 توکن ربات ناظر را بفرستید (از BotFather).\n🧹 پیام شما بعد از خواندن پاک می‌شود. لغو: /cancel"));
-    case "supdel": await clearSupervisor(env, u.id); return home(env, u);
+    case "sup": case "asst": await setSession(env, u.id, "gp_bot", { role: act }); return void (await tg.send(env, u.id, `🔑 توکن ربات ${ROLES[act].fa} را بفرستید (از BotFather).\n🧹 پیام شما بعد از خواندن پاک می‌شود. لغو: /cancel`));
+    case "supdel": case "asstdel": await clearRoleBot(env, u.id, act === "supdel" ? "sup" : "asst"); return home(env, u);
     case "les": {
-      const rows = (await env.DB.prepare("SELECT id, rule FROM ea_lessons WHERE user_id=? ORDER BY id DESC LIMIT 15").bind(u.id).all<{ id: number; rule: string }>()).results;
-      if (!rows.length) return void (await tg.send(env, u.id, "🧠 هنوز چیزی یاد نگرفته‌ام. وقتی «🚩 گزارش خطا» بزنید، از آن یک قانون می‌سازم."));
-      for (const r of rows) await tg.send(env, u.id, `🧠 ${esc(r.rule)}`, ikb([[["🗑 فراموش کن", `gp:ld:${r.id}`]]]));
+      const rows = (await env.DB.prepare("SELECT id, rule FROM ea_lessons WHERE user_id=? ORDER BY id DESC LIMIT 20").bind(u.id).all<{ id: number; rule: string }>()).results;
+      await tg.send(env, u.id, `🧠 <b>آموخته‌ها</b> (${rows.length})\nهر قانون را می‌توانید ویرایش یا حذف کنید.`, ikb([[["➕ افزودن قانون", "gp:ln"]]]));
+      for (const r of rows) await tg.send(env, u.id, `🧠 ${esc(r.rule)}`, lessonKb(r.id));
       return;
+    }
+    case "ln": await setSession(env, u.id, "gp_led", { id: 0 }); return void (await tg.send(env, u.id, "➕ متن قانون جدید را بنویسید (کوتاه و کلی، مثلاً «آخر متن، آیدی کانال دیگر نگذار»).\nلغو: /cancel"));
+    case "le": {
+      const r = await env.DB.prepare("SELECT rule FROM ea_lessons WHERE id=? AND user_id=?").bind(Number(arg), u.id).first<{ rule: string }>();
+      if (!r) return void (await tg.send(env, u.id, "این قانون پیدا نشد."));
+      await setSession(env, u.id, "gp_led", { id: Number(arg) });
+      return void (await tg.send(env, u.id, `✏️ متن فعلی:\n<i>${esc(r.rule)}</i>\n\nمتن جدید را بنویسید.\nلغو: /cancel`));
     }
     case "ld": await env.DB.prepare("DELETE FROM ea_lessons WHERE id=? AND user_id=?").bind(Number(arg), u.id).run(); if (q.message) await tg.edit(env, u.id, q.message.message_id, "🗑 فراموش شد."); return;
   }
 }
-export async function gotSupervisorToken(c: Ctx, u: UserRow, m: TgMessage, text: string): Promise<void> {
+export async function gotLesson(c: Ctx, u: UserRow, d: Record<string, any>, text: string): Promise<void> {
+  const { env } = c, rule = text.replace(/\s+/g, " ").trim().slice(0, 300);
+  if (rule.length < 6) return void (await tg.send(env, u.id, "قانون خیلی کوتاه است؛ کمی واضح‌تر بنویسید."));
+  await clearSession(env, u.id);
+  if (d.id) { await env.DB.prepare("UPDATE ea_lessons SET rule=? WHERE id=? AND user_id=?").bind(rule, Number(d.id), u.id).run(); return void (await tg.send(env, u.id, "✅ قانون به‌روز شد.", lessonKb(Number(d.id)))); }
+  await addLesson(env, u.id, rule, "owner");
+  await tg.send(env, u.id, "✅ قانون اضافه شد؛ از این به بعد ایجنت و ناظر رعایتش می‌کنند.");
+}
+export async function gotBotToken(c: Ctx, u: UserRow, m: TgMessage, text: string, role: Role): Promise<void> {
   const { env } = c;
   await tg.del(env, u.id, m.message_id);
   const token = text.trim();
   if (!/^\d{6,}:[A-Za-z0-9_-]{20,}$/.test(token)) return void (await tg.send(env, u.id, "❌ قالب توکن درست نیست (مثل 123456:ABC…). دوباره بفرستید یا /cancel."));
-  const r = await setSupervisor(env, u.id, token);
+  const r = await setRoleBot(env, u.id, role, token);
   if (!r.ok) return void (await tg.send(env, u.id, `❌ تلگرام توکن را نپذیرفت: ${esc(r.error)}`));
   await clearSession(env, u.id);
-  await tg.send(env, u.id, `✅ ربات ناظر ثبت شد: @${esc(r.name)}${r.inGroup === false ? "\n⚠️ هنوز در گروه نیست؛ آن را به گروه اضافه و ادمین کنید (تا آن موقع همین ربات گزارش می‌دهد)." : r.inGroup ? "\n✅ در گروه عضو است." : "\nبعد از اتصال گروه، آن را در گروه ادمین کنید."}`);
+  await tg.send(env, u.id, `✅ ربات ${ROLES[role].fa} ثبت شد: @${esc(r.name)}${r.inGroup === false ? "\n⚠️ هنوز در گروه نیست؛ آن را به گروه اضافه و ادمین کنید (تا آن موقع همین ربات به نام او می‌نویسد)." : r.inGroup ? "\n✅ در گروه عضو است." : "\nبعد از اتصال گروه، آن را در گروه ادمین کنید."}`);
+}
+
+// ------------------------------------------------------------------ the agents' questions to the owner
+export async function onAskCallback(c: Ctx, u: UserRow, q: TgCallback, act: string, arg: string): Promise<void> {
+  const { env } = c, id = Number(arg);
+  await tg.answer(env, q.id);
+  if (act === "skip") { await env.DB.prepare("UPDATE ea_asks SET status='skipped' WHERE id=? AND user_id=? AND status='open'").bind(id, u.id).run(); return void (await tg.send(env, u.id, "⏭ نادیده گرفته شد.")); }
+  const a = await env.DB.prepare("SELECT question FROM ea_asks WHERE id=? AND user_id=? AND status='open'").bind(id, u.id).first<{ question: string }>();
+  if (!a) return void (await tg.send(env, u.id, "این سؤال دیگر باز نیست."));
+  await setSession(env, u.id, "as_ans", { id });
+  await tg.send(env, u.id, `💬 پاسختان را بنویسید:\n\n<i>${esc(a.question)}</i>\n\nلغو: /cancel`);
+}
+export async function gotAnswer(c: Ctx, u: UserRow, d: Record<string, any>, text: string): Promise<void> {
+  await clearSession(c.env, u.id);
+  const ok = await answerAsk(c.env, u.id, Number(d.id), text);
+  await tg.send(c.env, u.id, ok ? "✅ پاسخ شما به شورا رسید؛ ناظر و دستیار تا یک دقیقه‌ی دیگر روی آن کار می‌کنند." : "این سؤال دیگر باز نیست.");
 }
